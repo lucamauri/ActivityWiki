@@ -1,0 +1,64 @@
+{
+  "name": "ActivityWiki",
+  "version": "1.0.0",
+  "author": ["Luca Mauri"],
+  "url": "https://github.com/lucamauri/ActivityWiki",
+  "descriptionmsg": "activitywiki-desc",
+  "license-name": "GPL-2.0-or-later",
+  "type": "library",
+  "requires": {
+    "MediaWiki": ">= 1.35.0"
+  },
+  "config": {
+    "ActivityPubEnabled": {
+      "value": true,
+      "description": "Enable ActivityPub support in the wiki"
+    },
+    "ActivityPubActorName": {
+      "value": "Wiki",
+      "description": "The name used for the wiki actor in the Fediverse"
+    },
+    "ActivityPubActorIcon": {
+      "value": "/logo.png",
+      "description": "URL to the wiki icon/logo for ActivityPub profile"
+    },
+    "ActivityPubEnableUserActors": {
+      "value": false,
+      "description": "Enable per-user ActivityPub actors (Phase 3+)"
+    },
+    "ActivityPubExcludedNamespaces": {
+      "value": [],
+      "description": "Array of namespace IDs to exclude from ActivityPub federation"
+    },
+    "ActivityPubExcludeBots": {
+      "value": true,
+      "description": "Exclude bot edits from ActivityPub activities"
+    },
+    "ActivityPubExcludeMinor": {
+      "value": false,
+      "description": "Exclude minor edits from ActivityPub activities"
+    }
+  },
+  "MessagesDirs": {
+    "ActivityWiki": "i18n"
+  },
+  "Hooks": {
+    "PageSaveComplete": ["MediawikiActivityPub\\Hooks::onPageSaveComplete"]
+  },
+  "APIModules": {
+    "activitypub": "MediawikiActivityPub\\Api\\ActivityPubModule"
+  },
+  "AutoloadClasses": {
+    "MediawikiActivityPub\\Hooks": "includes/Hooks.php",
+    "MediawikiActivityPub\\ActivityBuilder": "includes/ActivityBuilder.php",
+    "MediawikiActivityPub\\DeliveryQueue": "includes/DeliveryQueue.php",
+    "MediawikiActivityPub\\Api\\ActivityPubModule": "includes/Api/ActivityPubModule.php",
+    "MediawikiActivityPub\\Jobs\\DeliveryJob": "includes/Jobs/DeliveryJob.php"
+  },
+  "namespaces": [
+    {
+      "path": "includes/",
+      "namespace": "MediawikiActivityPub"
+    }
+  ]
+}
