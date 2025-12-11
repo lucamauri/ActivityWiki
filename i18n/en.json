@@ -1,0 +1,7 @@
+{
+  "@metadata": {
+    "authors": ["Luca Mauri"],
+    "license-name": "GPL-2.0-or-later"
+  },
+  "activitywiki-desc": "Integrate your MediaWiki instance with the Fediverse via ActivityPub protocol"
+}

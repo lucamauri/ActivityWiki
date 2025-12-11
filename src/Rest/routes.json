@@ -1,0 +1,17 @@
+[
+  {
+    "path": "/activitypub/actor",
+    "class": "MediawikiActivityPub\\Api\\ActivityPubModule",
+    "method": "getActor"
+  },
+  {
+    "path": "/activitypub/outbox",
+    "class": "MediawikiActivityPub\\Api\\ActivityPubModule",
+    "method": "getOutbox"
+  },
+  {
+    "path": "/activitypub/followers",
+    "class": "MediawikiActivityPub\\Api\\ActivityPubModule",
+    "method": "getFollowers"
+  }
+]

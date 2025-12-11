@@ -46,23 +46,7 @@
   "Hooks": {
     "PageSaveComplete": ["MediawikiActivityPub\\Hooks::onPageSaveComplete"]
   },
-  "RestRoutes": [
-    {
-      "path": "/activitypub/actor",
-      "class": "MediawikiActivityPub\\Api\\ActivityPubModule",
-      "method": "getActor"
-    },
-    {
-      "path": "/activitypub/outbox",
-      "class": "MediawikiActivityPub\\Api\\ActivityPubModule",
-      "method": "getOutbox"
-    },
-    {
-      "path": "/activitypub/followers",
-      "class": "MediawikiActivityPub\\Api\\ActivityPubModule",
-      "method": "getFollowers"
-    }
-  ],
+  "RestModuleFiles": ["src/Rest/routes.json"],
   "AutoloadClasses": {
     "MediawikiActivityPub\\Hooks": "includes/Hooks.php",
     "MediawikiActivityPub\\ActivityBuilder": "includes/ActivityBuilder.php",
