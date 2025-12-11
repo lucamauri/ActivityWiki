@@ -1,0 +1,40 @@
+┌────────────────────────────────────────────────────────────-─┐
+│                    MediaWiki Instance                        │
+├───────────────────────────────────────────────────────────-──┤
+│                                                              │
+│  Page Edit Event                                             │
+│       ↓                                                      │
+│  ┌────────────────────────────────────────┐                  │
+│  │  Hook: PageSaveComplete                │                  │
+│  │  ✓ Fires after page is saved           │                  │
+│  │  ✓ Has access to title, content, user  │                  │
+│  └────────────────────────────────────────┘                  │
+│       ↓                                                      │
+│  ┌────────────────────────────────────────┐                  │
+│  │  ActivityPub Handler (Extension Code)  │                  │
+│  │  ✓ Create Activity JSON object         │                  │
+│  │  ✓ Log to activity_queue table         │                  │
+│  │  ✓ Queue HTTP delivery                 │                  │
+│  └────────────────────────────────────────┘                  │
+│       ↓                                                      │
+│  ┌────────────────────────────────────────┐                  │
+│  │  REST API Endpoints (for Fediverse)    │                  │
+│  │  ✓ /api/activitypub/actor              │                  │
+│  │  ✓ /api/activitypub/outbox             │                  │
+│  │  ✓ /api/activitypub/followers          │                  │
+│  │  ✓ /api/activitypub/users/{user}       │                  │
+│  └────────────────────────────────────────┘                  │
+│       ↓                                                      │
+│  ┌────────────────────────────────────────┐                  │
+│  │  Async Delivery (Job Queue)            │                  │
+│  │  ✓ HTTP POST to follower inboxes       │                  │
+│  │  ✓ Retry logic for failures            │                  │
+│  │  ✓ Signature (HTTP Signatures RFC 8017)│                  │
+│  └────────────────────────────────────────┘                  │
+│       ↓                                                      │
+│  ┌─────────────────────────────────────────────────────────┐ │
+│  │           Fediverse (Mastodon, etc.)                    │ │
+│  │           Followers receive activity                    │ │
+│  └─────────────────────────────────────────────────────────┘ │
+│                                                              │
+└──────────────────────────────────────────────────────────-───┘

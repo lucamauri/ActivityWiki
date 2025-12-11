@@ -6,15 +6,15 @@ use MediaWiki\Page\Hook\PageSaveCompleteHook;
 class Hooks implements PageSaveCompleteHook {
     
     /**
-     * Fires when a page is saved
+     * Called when a page is saved
      */
     public function onPageSaveComplete( 
-        $wikiPage,                    // WikiPage object
-        $user,                        // User object
-        $summary,                     // Edit summary
-        $flags,                       // flags (e.g., EDIT_NEW)
-        $revisionRecord,              // RevisionRecord object
-        $editResult                   // EditResult
+        $wikiPage,
+        $user,
+        $summary,
+        $flags,
+        $revisionRecord,
+        $editResult
     ) {
         global $wgActivityPubEnabled;
         
@@ -22,14 +22,14 @@ class Hooks implements PageSaveCompleteHook {
             return;
         }
         
-        // Ignore bot edits, minor edits (configurable)
+        // Skip bot edits
         if ( $user->isBot() ) {
             return;
         }
         
+        // Build the activity
         $activityBuilder = new ActivityBuilder();
         
-        // Determine if this is a Create or Update
         if ( $flags & EDIT_NEW ) {
             $activity = $activityBuilder->createCreateActivity(
                 $wikiPage,
@@ -44,9 +44,12 @@ class Hooks implements PageSaveCompleteHook {
             );
         }
         
-        // Queue for delivery
+        // Queue the activity
         $deliveryQueue = new DeliveryQueue();
         $deliveryQueue->queueActivity( $activity );
+        
+        // Log for debugging
+        wfDebugLog( 'activitypub', 'Activity queued: ' . $activity['id'] );
         
         return true;
     }

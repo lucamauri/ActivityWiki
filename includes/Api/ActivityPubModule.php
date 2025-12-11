@@ -1,54 +1,42 @@
 <?php
 namespace MediawikiActivityPub\Api;
 
-class ActivityPubModule {
+use MediaWiki\Rest\SimpleHandler;
+
+class ActivityPubModule extends SimpleHandler {
     
     /**
      * GET /api/rest_v1/activitypub/actor
-     * Returns the wiki's actor profile
      */
-    public function getActorProfile() {
-        global $wgSitename, $wgActivityPubActorName;
+    public function getActor() {
+        global $wgSitename;
         
         return [
             '@context' => 'https://www.w3.org/ns/activitystreams',
-            'id' => wfExpandUrl( '/' ) . 'api/activitypub/actor',
+            'id' => wfExpandUrl( '/api/rest_v1/activitypub/actor' ),
             'type' => 'Service',
-            'name' => $wgActivityPubActorName ?? $wgSitename,
+            'name' => $wgSitename,
             'preferredUsername' => str_replace( ' ', '', $wgSitename ),
-            'inbox' => wfExpandUrl( '/' ) . 'api/activitypub/inbox',
-            'outbox' => wfExpandUrl( '/' ) . 'api/activitypub/outbox',
-            'followers' => wfExpandUrl( '/' ) . 'api/activitypub/followers',
-            'publicKey' => [
-                'id' => wfExpandUrl( '/' ) . 'api/activitypub/actor#main-key',
-                'owner' => wfExpandUrl( '/' ) . 'api/activitypub/actor',
-                'publicKeyPem' => $this->getPublicKey(),
-            ],
-            'icon' => [
-                'type' => 'Image',
-                'url' => wfExpandUrl( '/wiki-logo.png' ),
-            ],
+            'inbox' => wfExpandUrl( '/api/rest_v1/activitypub/inbox' ),
+            'outbox' => wfExpandUrl( '/api/rest_v1/activitypub/outbox' ),
+            'followers' => wfExpandUrl( '/api/rest_v1/activitypub/followers' ),
             'summary' => 'The ' . $wgSitename . ' wiki',
         ];
     }
     
     /**
      * GET /api/rest_v1/activitypub/outbox
-     * Returns paginated list of activities
      */
-    public function getOutbox( $params ) {
-        $limit = $params['limit'] ?? 10;
-        $page = $params['page'] ?? 1;
-        
+    public function getOutbox() {
         $db = wfGetDB( DB_REPLICA );
+        
         $result = $db->select(
             'activitypub_activities',
             [ 'activity_json', 'created_at' ],
             [ 'published' => 1 ],
             __METHOD__,
             [
-                'LIMIT' => $limit,
-                'OFFSET' => ( $page - 1 ) * $limit,
+                'LIMIT' => 10,
                 'ORDER BY' => 'created_at DESC'
             ]
         );
@@ -60,7 +48,7 @@ class ActivityPubModule {
         
         return [
             '@context' => 'https://www.w3.org/ns/activitystreams',
-            'id' => wfExpandUrl( '/' ) . 'api/activitypub/outbox',
+            'id' => wfExpandUrl( '/api/rest_v1/activitypub/outbox' ),
             'type' => 'OrderedCollection',
             'totalItems' => count( $activities ),
             'orderedItems' => $activities,
@@ -69,12 +57,11 @@ class ActivityPubModule {
     
     /**
      * GET /api/rest_v1/activitypub/followers
-     * Empty followers list (for now—no incoming follows handled yet)
      */
     public function getFollowers() {
         return [
             '@context' => 'https://www.w3.org/ns/activitystreams',
-            'id' => wfExpandUrl( '/' ) . 'api/activitypub/followers',
+            'id' => wfExpandUrl( '/api/rest_v1/activitypub/followers' ),
             'type' => 'OrderedCollection',
             'totalItems' => 0,
             'orderedItems' => [],

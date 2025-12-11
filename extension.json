@@ -5,7 +5,8 @@
   "url": "https://github.com/lucamauri/ActivityWiki",
   "descriptionmsg": "activitywiki-desc",
   "license-name": "GPL-2.0-or-later",
-  "type": "library",
+  "type": "api",
+  "manifest_version": 2,
   "requires": {
     "MediaWiki": ">= 1.35.0"
   },
@@ -45,9 +46,23 @@
   "Hooks": {
     "PageSaveComplete": ["MediawikiActivityPub\\Hooks::onPageSaveComplete"]
   },
-  "APIModules": {
-    "activitypub": "MediawikiActivityPub\\Api\\ActivityPubModule"
-  },
+  "RestRoutes": [
+    {
+      "path": "/activitypub/actor",
+      "class": "MediawikiActivityPub\\Api\\ActivityPubModule",
+      "method": "getActor"
+    },
+    {
+      "path": "/activitypub/outbox",
+      "class": "MediawikiActivityPub\\Api\\ActivityPubModule",
+      "method": "getOutbox"
+    },
+    {
+      "path": "/activitypub/followers",
+      "class": "MediawikiActivityPub\\Api\\ActivityPubModule",
+      "method": "getFollowers"
+    }
+  ],
   "AutoloadClasses": {
     "MediawikiActivityPub\\Hooks": "includes/Hooks.php",
     "MediawikiActivityPub\\ActivityBuilder": "includes/ActivityBuilder.php",

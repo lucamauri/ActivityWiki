@@ -1,6 +1,6 @@
 {
   "name": "lucamauri/activitywiki",
-  "description": "ActivityPub support for MediaWiki - Connect your wiki to the Fediverse",
+  "description": "ActivityPub support for MediaWiki - Integrate your MediaWiki instance with the Fediverse via ActivityPub.",
   "keywords": [
     "mediawiki",
     "activitypub",
@@ -9,12 +9,12 @@
     "mastodon"
   ],
   "homepage": "https://github.com/lucamauri/ActivityWiki",
-  "license": "GPL-3.0-or-later",
-  "type": "library",
+  "license": "GPL-2.0-or-later",
+  "type": "mediawiki-extension",
   "authors": [
     {
       "name": "Luca Mauri",
-      "homepage": "https://lucamauri.com"
+      "homepage": "https://www.lucamauri.com"
     }
   ],
   "require": {
