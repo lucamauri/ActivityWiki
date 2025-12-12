@@ -1,3 +1,4 @@
+<?php
 namespace MediawikiActivityPub\Api;
 
 use MediaWiki\Rest\SimpleHandler;
