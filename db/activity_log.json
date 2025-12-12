@@ -1,0 +1,76 @@
+{
+  "name": "activity_log",
+  "comment": "ActivityWiki activity log table",
+  "columns": [
+    {
+      "name": "id",
+      "type": "integer",
+      "options": { "notnull": true, "autoincrement": true }
+    },
+    {
+      "name": "activity_id",
+      "type": "text",
+      "options": { "notnull": true, "length": 255 }
+    },
+    {
+      "name": "activity_type",
+      "type": "text",
+      "options": { "notnull": true, "length": 20 }
+    },
+    {
+      "name": "object_type",
+      "type": "text",
+      "options": { "notnull": true, "length": 20 }
+    },
+    {
+      "name": "page_id",
+      "type": "integer",
+      "options": { "notnull": false }
+    },
+    {
+      "name": "page_title",
+      "type": "text",
+      "options": { "notnull": false, "length": 255 }
+    },
+    {
+      "name": "user_id",
+      "type": "integer",
+      "options": { "notnull": false }
+    },
+    {
+      "name": "activity_json",
+      "type": "text",
+      "options": { "notnull": true }
+    },
+    {
+      "name": "created_at",
+      "type": "timestamp",
+      "options": { "notnull": true, "default": "CURRENT_TIMESTAMP" }
+    },
+    {
+      "name": "published",
+      "type": "boolean",
+      "options": { "notnull": true, "default": false }
+    }
+  ],
+  "indexes": [
+    {
+      "name": "idx_activity_id",
+      "columns": ["activity_id"],
+      "unique": true
+    },
+    {
+      "name": "idx_page_id",
+      "columns": ["page_id"]
+    },
+    {
+      "name": "idx_user_id",
+      "columns": ["user_id"]
+    },
+    {
+      "name": "idx_published",
+      "columns": ["published"]
+    }
+  ],
+  "pk": ["id"]
+}
