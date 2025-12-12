@@ -43,6 +43,9 @@
   "MessagesDirs": {
     "ActivityWiki": "i18n"
   },
+  "DatabaseSchemas": {
+    "activity_log": "db/activity_log.json"
+  },
   "Hooks": {
     "PageSaveComplete": ["MediawikiActivityPub\\Hooks::onPageSaveComplete"]
   },
