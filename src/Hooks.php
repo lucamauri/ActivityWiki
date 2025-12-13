@@ -5,8 +5,8 @@ namespace MediaWiki\Extension\ActivityWiki;
 use MediaWiki\Page\Hook\PageSaveCompleteHook;
 use MediaWiki\Config\ConfigFactory;
 use MediaWiki\MediaWikiServices;
-use MediawikiActivityPub\ActivityBuilder;
-use MediawikiActivityPub\DeliveryQueue;
+use MediaWiki\Extension\ActivityWiki\ActivityBuilder;
+use MediaWiki\Extension\ActivityWiki\DeliveryQueue;
 
 class Hooks implements PageSaveCompleteHook {
 
@@ -29,8 +29,9 @@ class Hooks implements PageSaveCompleteHook {
         $revisionRecord,
         $editResult
     ): void {
+    wfDebugLog( 'activitypub', 'onPageSaveComplete hook fired for: ' . $wikiPage->getTitle()->getPrefixedText() );
     try {
-        wfDebugLog( 'activitypub', 'Hook fired for: ' . $wikiPage->getTitle()->getPrefixedText() );
+        wfDebugLog( 'activitypub', 'Entering try block' );
         
         $config = MediaWikiServices::getInstance()->getConfigFactory()->makeConfig( 'main' );
 
