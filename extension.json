@@ -60,14 +60,7 @@
   "RestModuleFiles": ["src/Rest/routes.json"],
 
   "AutoloadNamespaces": {
-    "MediaWiki\\Extension\\ActivityWiki\\": "src/"
-  },
-
-  "AutoloadClasses": {
-    "MediawikiActivityPub\\Hooks": "includes/Hooks.php",
-    "MediawikiActivityPub\\ActivityBuilder": "includes/ActivityBuilder.php",
-    "MediawikiActivityPub\\DeliveryQueue": "includes/DeliveryQueue.php",
-    "MediawikiActivityPub\\Api\\ActivityPubModule": "includes/Api/ActivityPubModule.php",
-    "MediawikiActivityPub\\Jobs\\DeliveryJob": "includes/Jobs/DeliveryJob.php"
+    "MediaWiki\\Extension\\ActivityWiki\\": "src/",
+    "MediawikiActivityPub\\": "includes/"
   }
 }
