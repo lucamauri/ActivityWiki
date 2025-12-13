@@ -29,28 +29,41 @@ class Hooks implements PageSaveCompleteHook {
         $revisionRecord,
         $editResult
     ): void {
+    try {
+        wfDebugLog( 'activitypub', 'Hook fired for: ' . $wikiPage->getTitle()->getPrefixedText() );
+        
         $config = MediaWikiServices::getInstance()->getConfigFactory()->makeConfig( 'main' );
 
         // Check if ActivityPub is enabled
         if ( !$config->get( 'ActivityPubEnabled' ) ) {
+            wfDebugLog( 'activitypub', 'ActivityPub disabled' );
             return;
         }
+
+        wfDebugLog( 'activitypub', 'ActivityPub enabled, continuing...' );
 
         // Skip bot edits
         if ( $user->isBot() ) {
+            wfDebugLog( 'activitypub', 'Skipping bot edit' );
             return;
         }
 
+        wfDebugLog( 'activitypub', 'Not a bot edit, continuing...' );
+
         // Skip minor edits if configured
         if ( $config->get( 'ActivityPubExcludeMinor' ) && $flags & EDIT_MINOR ) {
+            wfDebugLog( 'activitypub', 'Skipping minor edit' );
             return;
         }
 
         // Skip excluded namespaces
         $excludedNamespaces = $config->get( 'ActivityPubExcludedNamespaces' );
         if ( in_array( $wikiPage->getNamespace(), $excludedNamespaces ) ) {
+            wfDebugLog( 'activitypub', 'Skipping excluded namespace' );
             return;
         }
+
+        wfDebugLog( 'activitypub', 'Building activity...' );
 
         // Build the activity
         $activityBuilder = new ActivityBuilder();
@@ -71,11 +84,16 @@ class Hooks implements PageSaveCompleteHook {
             );
         }
 
+        wfDebugLog( 'activitypub', 'Activity built: ' . json_encode( $activity ) );
+
         // Queue the activity for delivery
         $deliveryQueue = new DeliveryQueue();
         $deliveryQueue->queueActivity( $activity );
 
-        // Log for debugging
         wfDebugLog( 'activitypub', 'Activity queued for ' . $wikiPage->getTitle()->getPrefixedText() );
+    } catch ( \Exception $e ) {
+        wfDebugLog( 'activitypub', 'Error in hook: ' . $e->getMessage() . ' ' . $e->getTraceAsString() );
     }
+}
+
 }
