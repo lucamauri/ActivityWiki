@@ -60,7 +60,6 @@
   "RestModuleFiles": ["src/Rest/routes.json"],
 
   "AutoloadNamespaces": {
-    "MediaWiki\\Extension\\ActivityWiki\\": "src/",
-    "MediawikiActivityPub\\": "includes/"
+    "MediaWiki\\Extension\\ActivityWiki\\": "src/"
   }
 }
