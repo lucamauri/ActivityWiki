@@ -7,9 +7,11 @@
   "license-name": "GPL-2.0-or-later",
   "type": "api",
   "manifest_version": 2,
+
   "requires": {
     "MediaWiki": ">= 1.35.0"
   },
+
   "config": {
     "ActivityPubEnabled": {
       "value": true,
@@ -40,27 +42,30 @@
       "description": "Exclude minor edits from ActivityPub activities"
     }
   },
+
   "MessagesDirs": {
     "ActivityWiki": "i18n"
   },
+
   "DatabaseSchemas": {
     "activity_log": "db/activity_log.json"
   },
+
   "Hooks": {
     "PageSaveComplete": ["MediawikiActivityPub\\Hooks::onPageSaveComplete"]
   },
+
   "RestModuleFiles": ["src/Rest/routes.json"],
+
+  "AutoloadNamespaces": {
+    "MediaWiki\\Extension\\ActivityWiki\\": "src/"
+  },
+
   "AutoloadClasses": {
     "MediawikiActivityPub\\Hooks": "includes/Hooks.php",
     "MediawikiActivityPub\\ActivityBuilder": "includes/ActivityBuilder.php",
     "MediawikiActivityPub\\DeliveryQueue": "includes/DeliveryQueue.php",
     "MediawikiActivityPub\\Api\\ActivityPubModule": "includes/Api/ActivityPubModule.php",
     "MediawikiActivityPub\\Jobs\\DeliveryJob": "includes/Jobs/DeliveryJob.php"
-  },
-  "namespaces": [
-    {
-      "path": "includes/",
-      "namespace": "MediawikiActivityPub"
-    }
-  ]
+  }
 }

@@ -1,17 +1,17 @@
 [
   {
     "path": "/activitypub/actor",
-    "class": "MediawikiActivityPub\\Api\\ActivityPubModule",
-    "method": "getActor"
+    "method": "GET",
+    "class": "MediaWiki\\Extension\\ActivityWiki\\Rest\\ActorHandler"
   },
   {
     "path": "/activitypub/outbox",
-    "class": "MediawikiActivityPub\\Api\\ActivityPubModule",
-    "method": "getOutbox"
+    "method": "GET",
+    "class": "MediaWiki\\Extension\\ActivityWiki\\Rest\\OutboxHandler"
   },
   {
     "path": "/activitypub/followers",
-    "class": "MediawikiActivityPub\\Api\\ActivityPubModule",
-    "method": "getFollowers"
+    "method": "GET",
+    "class": "MediaWiki\\Extension\\ActivityWiki\\Rest\\FollowersHandler"
   }
 ]
