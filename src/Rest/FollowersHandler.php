@@ -3,21 +3,16 @@
 namespace MediaWiki\Extension\ActivityWiki\Rest;
 
 use MediaWiki\Rest\SimpleHandler;
+use MediawikiActivityPub\Api\ActivityPubModule;
 
 class FollowersHandler extends SimpleHandler {
 
     /**
      * Handle GET /activitypub/followers
      *
-     * @return array
+     * @return array ActivityPub Collection object
      */
     public function run() {
-        // TODO: Build and return an ActivityPub Collection of followers
-        return [
-            'type' => 'Collection',
-            'id' => 'https://example.org/activitypub/followers',
-            'totalItems' => 0,
-            'items' => [],
-        ];
+        return ActivityPubModule::buildFollowersObject();
     }
 }

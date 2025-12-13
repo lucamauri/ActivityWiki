@@ -52,7 +52,9 @@
   },
 
   "Hooks": {
-    "PageSaveComplete": ["MediawikiActivityPub\\Hooks::onPageSaveComplete"]
+    "PageSaveComplete": [
+      "MediaWiki\\Extension\\ActivityWiki\\Hooks::onPageSaveComplete"
+    ]
   },
 
   "RestModuleFiles": ["src/Rest/routes.json"],
