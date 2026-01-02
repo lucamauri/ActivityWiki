@@ -1,8 +1,7 @@
 <?php
-namespace MediawikiActivityPub\Jobs;
+namespace MediaWiki\Extension\ActivityWiki\Jobs;
 
 use Job;
-use MediaWiki\Http\HttpRequestFactory;
 
 class DeliveryJob extends Job {
     
