@@ -1,6 +1,6 @@
 <?php
 
-namespace MediawikiActivityPub\Api;
+namespace MediaWiki\Extension\ActivityWiki\Api;
 
 use MediaWiki\Config\Config;
 use MediaWiki\MediaWikiServices;
