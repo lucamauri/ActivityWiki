@@ -51,10 +51,14 @@
     "activity_log": "db/activity_log.json"
   },
 
+  "HookHandlers": {
+    "PageSaveComplete": {
+      "class": "MediaWiki\\Extension\\ActivityWiki\\Hooks"
+    }
+  },
+
   "Hooks": {
-    "PageSaveComplete": [
-      "MediaWiki\\Extension\\ActivityWiki\\Hooks::onPageSaveComplete"
-    ]
+    "PageSaveComplete": "PageSaveComplete"
   },
 
   "RestModuleFiles": ["src/Rest/routes.json"],

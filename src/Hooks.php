@@ -2,25 +2,11 @@
 
 namespace MediaWiki\Extension\ActivityWiki;
 
-use MediaWiki\Page\Hook\PageSaveCompleteHook;
-use MediaWiki\Config\ConfigFactory;
+use MediaWiki\Storage\Hook\PageSaveCompleteHook;
 use MediaWiki\MediaWikiServices;
-use MediaWiki\Extension\ActivityWiki\ActivityBuilder;
-use MediaWiki\Extension\ActivityWiki\DeliveryQueue;
 
 class Hooks implements PageSaveCompleteHook {
 
-    /**
-     * Called when a page is saved
-     *
-     * @param \MediaWiki\Page\WikiPage $wikiPage
-     * @param \MediaWiki\User\User $user
-     * @param string $summary
-     * @param int $flags
-     * @param \MediaWiki\Revision\RevisionRecord $revisionRecord
-     * @param \MediaWiki\Storage\EditResult $editResult
-     * @return bool
-     */
     public function onPageSaveComplete(
         $wikiPage,
         $user,
@@ -28,73 +14,78 @@ class Hooks implements PageSaveCompleteHook {
         $flags,
         $revisionRecord,
         $editResult
-    ): void {
-    wfDebugLog( 'activitypub', 'onPageSaveComplete hook fired for: ' . $wikiPage->getTitle()->getPrefixedText() );
-    try {
-        wfDebugLog( 'activitypub', 'Entering try block' );
-        
-        $config = MediaWikiServices::getInstance()->getConfigFactory()->makeConfig( 'main' );
+    ) {
+        wfDebugLog( 'activitypub', '=== PageSaveComplete HOOK ENTERED ===' );
+        wfDebugLog( 'activitypub', 'Page: ' . $wikiPage->getTitle()->getPrefixedText() );
 
-        // Check if ActivityPub is enabled
-        if ( !$config->get( 'ActivityPubEnabled' ) ) {
-            wfDebugLog( 'activitypub', 'ActivityPub disabled' );
-            return;
+        try {
+            $config = MediaWikiServices::getInstance()->getConfigFactory()->makeConfig( 'main' );
+
+            if ( !$config->get( 'ActivityPubEnabled' ) ) {
+                wfDebugLog( 'activitypub', 'ActivityPub disabled' );
+                return true;
+            }
+
+            if ( $user->isBot() ) {
+                wfDebugLog( 'activitypub', 'Bot edit - skipping' );
+                return true;
+            }
+
+            if ( $config->get( 'ActivityPubExcludeMinor' ) && ($flags & EDIT_MINOR) ) {
+                wfDebugLog( 'activitypub', 'Minor edit - skipping' );
+                return true;
+            }
+
+            $excludedNamespaces = $config->get( 'ActivityPubExcludedNamespaces' );
+            $namespace = $wikiPage->getNamespace();
+            if ( in_array( $namespace, $excludedNamespaces ) ) {
+                wfDebugLog( 'activitypub', "Namespace $namespace excluded" );
+                return true;
+            }
+
+            wfDebugLog( 'activitypub', 'All checks passed' );
+
+            wfDebugLog( 'activitypub', 'Instantiating ActivityBuilder...' );
+            $activityBuilder = new ActivityBuilder();
+            wfDebugLog( 'activitypub', 'ActivityBuilder instantiated successfully' );
+
+            if ( $flags & EDIT_NEW ) {
+                wfDebugLog( 'activitypub', 'Creating CREATE activity...' );
+                $activity = $activityBuilder->createCreateActivity(
+                    $wikiPage,
+                    $user,
+                    $revisionRecord,
+                    $summary
+                );
+                wfDebugLog( 'activitypub', 'CREATE activity built: ' . json_encode( $activity ) );
+            } else {
+                wfDebugLog( 'activitypub', 'Creating UPDATE activity...' );
+                $activity = $activityBuilder->createUpdateActivity(
+                    $wikiPage,
+                    $user,
+                    $revisionRecord,
+                    $summary
+                );
+                wfDebugLog( 'activitypub', 'UPDATE activity built: ' . json_encode( $activity ) );
+            }
+
+            wfDebugLog( 'activitypub', 'Instantiating DeliveryQueue...' );
+            $deliveryQueue = new DeliveryQueue();
+            wfDebugLog( 'activitypub', 'DeliveryQueue instantiated' );
+
+            wfDebugLog( 'activitypub', 'Queueing activity...' );
+            $deliveryQueue->queueActivity( $activity, $wikiPage, $user );
+            wfDebugLog( 'activitypub', 'Activity queued successfully' );
+
+            wfDebugLog( 'activitypub', '=== HOOK COMPLETED SUCCESSFULLY ===' );
+            return true;
+
+        } catch ( \Throwable $e ) {
+            wfDebugLog( 'activitypub', 'ERROR: ' . $e->getMessage() );
+            wfDebugLog( 'activitypub', 'ERROR CLASS: ' . get_class( $e ) );
+            wfDebugLog( 'activitypub', 'ERROR FILE: ' . $e->getFile() . ':' . $e->getLine() );
+            wfDebugLog( 'activitypub', 'TRACE: ' . $e->getTraceAsString() );
+            return true;
         }
-
-        wfDebugLog( 'activitypub', 'ActivityPub enabled, continuing...' );
-
-        // Skip bot edits
-        if ( $user->isBot() ) {
-            wfDebugLog( 'activitypub', 'Skipping bot edit' );
-            return;
-        }
-
-        wfDebugLog( 'activitypub', 'Not a bot edit, continuing...' );
-
-        // Skip minor edits if configured
-        if ( $config->get( 'ActivityPubExcludeMinor' ) && $flags & EDIT_MINOR ) {
-            wfDebugLog( 'activitypub', 'Skipping minor edit' );
-            return;
-        }
-
-        // Skip excluded namespaces
-        $excludedNamespaces = $config->get( 'ActivityPubExcludedNamespaces' );
-        if ( in_array( $wikiPage->getNamespace(), $excludedNamespaces ) ) {
-            wfDebugLog( 'activitypub', 'Skipping excluded namespace' );
-            return;
-        }
-
-        wfDebugLog( 'activitypub', 'Building activity...' );
-
-        // Build the activity
-        $activityBuilder = new ActivityBuilder();
-
-        if ( $flags & EDIT_NEW ) {
-            $activity = $activityBuilder->createCreateActivity(
-                $wikiPage,
-                $user,
-                $revisionRecord,
-                $summary
-            );
-        } else {
-            $activity = $activityBuilder->createUpdateActivity(
-                $wikiPage,
-                $user,
-                $revisionRecord,
-                $summary
-            );
-        }
-
-        wfDebugLog( 'activitypub', 'Activity built: ' . json_encode( $activity ) );
-
-        // Queue the activity for delivery
-        $deliveryQueue = new DeliveryQueue();
-        $deliveryQueue->queueActivity( $activity );
-
-        wfDebugLog( 'activitypub', 'Activity queued for ' . $wikiPage->getTitle()->getPrefixedText() );
-    } catch ( \Exception $e ) {
-        wfDebugLog( 'activitypub', 'Error in hook: ' . $e->getMessage() . ' ' . $e->getTraceAsString() );
     }
-}
-
 }
