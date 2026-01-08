@@ -40,6 +40,10 @@
     "ActivityPubExcludeMinor": {
       "value": false,
       "description": "Exclude minor edits from ActivityPub activities"
+    },
+    "ActivityPubDebugLevel": {
+      "value": 0,
+      "description": "Debug log level: 0=errors only, 1=verbose"
     }
   },
 

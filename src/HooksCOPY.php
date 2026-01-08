@@ -15,69 +15,69 @@ class Hooks implements PageSaveCompleteHook {
         $revisionRecord,
         $editResult
     ) {
-        $this->debug( '=== PageSaveComplete HOOK ENTERED ===' );
-        $this->debug( 'Page: ' . $wikiPage->getTitle()->getPrefixedText() );
+        wfDebugLog( 'activitypub', '=== PageSaveComplete HOOK ENTERED ===' );
+        wfDebugLog( 'activitypub', 'Page: ' . $wikiPage->getTitle()->getPrefixedText() );
 
         try {
             $config = MediaWikiServices::getInstance()->getConfigFactory()->makeConfig( 'main' );
 
             if ( !$config->get( 'ActivityPubEnabled' ) ) {
-                $this->debug( 'ActivityPub disabled' );
+                wfDebugLog( 'activitypub', 'ActivityPub disabled' );
                 return true;
             }
 
             if ( $user->isBot() ) {
-                $this->debug( 'Bot edit - skipping' );
+                wfDebugLog( 'activitypub', 'Bot edit - skipping' );
                 return true;
             }
 
             if ( $config->get( 'ActivityPubExcludeMinor' ) && ($flags & EDIT_MINOR) ) {
-                $this->debug( 'Minor edit - skipping' );
+                wfDebugLog( 'activitypub', 'Minor edit - skipping' );
                 return true;
             }
 
             $excludedNamespaces = $config->get( 'ActivityPubExcludedNamespaces' );
             $namespace = $wikiPage->getNamespace();
             if ( in_array( $namespace, $excludedNamespaces ) ) {
-                $this->debug( "Namespace $namespace excluded" );
+                wfDebugLog( 'activitypub', "Namespace $namespace excluded" );
                 return true;
             }
 
-            $this->debug( 'All checks passed' );
+            wfDebugLog( 'activitypub', 'All checks passed' );
 
-            $this->debug( 'Instantiating ActivityBuilder...' );
+            wfDebugLog( 'activitypub', 'Instantiating ActivityBuilder...' );
             $activityBuilder = new ActivityBuilder();
-            $this->debug( 'ActivityBuilder instantiated successfully' );
+            wfDebugLog( 'activitypub', 'ActivityBuilder instantiated successfully' );
 
             if ( $flags & EDIT_NEW ) {
-                $this->debug( 'Creating CREATE activity...' );
+                wfDebugLog( 'activitypub', 'Creating CREATE activity...' );
                 $activity = $activityBuilder->createCreateActivity(
                     $wikiPage,
                     $user,
                     $revisionRecord,
                     $summary
                 );
-                $this->debug( 'CREATE activity built: ' . json_encode( $activity ) );
+                wfDebugLog( 'activitypub', 'CREATE activity built: ' . json_encode( $activity ) );
             } else {
-                $this->debug( 'Creating UPDATE activity...' );
+                wfDebugLog( 'activitypub', 'Creating UPDATE activity...' );
                 $activity = $activityBuilder->createUpdateActivity(
                     $wikiPage,
                     $user,
                     $revisionRecord,
                     $summary
                 );
-                $this->debug( 'UPDATE activity built: ' . json_encode( $activity ) );
+                wfDebugLog( 'activitypub', 'UPDATE activity built: ' . json_encode( $activity ) );
             }
 
-            $this->debug( 'Instantiating DeliveryQueue...' );
+            wfDebugLog( 'activitypub', 'Instantiating DeliveryQueue...' );
             $deliveryQueue = new DeliveryQueue();
-            $this->debug( 'DeliveryQueue instantiated' );
+            wfDebugLog( 'activitypub', 'DeliveryQueue instantiated' );
 
-            $this->debug( 'Queueing activity...' );
+            wfDebugLog( 'activitypub', 'Queueing activity...' );
             $deliveryQueue->queueActivity( $activity, $wikiPage, $user );
-            $this->debug( 'Activity queued successfully' );
+            wfDebugLog( 'activitypub', 'Activity queued successfully' );
 
-            $this->debug( '=== HOOK COMPLETED SUCCESSFULLY ===' );
+            wfDebugLog( 'activitypub', '=== HOOK COMPLETED SUCCESSFULLY ===' );
             return true;
 
         } catch ( \Throwable $e ) {
@@ -86,18 +86,6 @@ class Hooks implements PageSaveCompleteHook {
             wfDebugLog( 'activitypub', 'ERROR FILE: ' . $e->getFile() . ':' . $e->getLine() );
             wfDebugLog( 'activitypub', 'TRACE: ' . $e->getTraceAsString() );
             return true;
-        }
-    }
-
-    /**
-     * Helper method to log debug messages based on configuration
-     */
-    private function debug( $message ) {
-        $config = MediaWikiServices::getInstance()->getConfigFactory()->makeConfig( 'main' );
-        $debugLevel = $config->get( 'ActivityPubDebugLevel' );
-        
-        if ( $debugLevel >= 1 ) {
-            wfDebugLog( 'activitypub', $message );
         }
     }
 }
