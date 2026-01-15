@@ -3,7 +3,7 @@
 namespace MediaWiki\Extension\ActivityWiki\Rest;
 
 use MediaWiki\Rest\SimpleHandler;
-use MediawikiActivityPub\Api\ActivityPubModule;
+use MediaWiki\Extension\ActivityWiki\Api\ActivityPubModule;
 
 class FollowersHandler extends SimpleHandler {
 
