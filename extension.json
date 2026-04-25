@@ -60,7 +60,9 @@
       "class": "MediaWiki\\Extension\\ActivityWiki\\Hooks"
     }
   },
-
+  "JobClasses": {
+    "MediawikiActivityPubDelivery": "MediaWiki\\Extension\\ActivityWiki\\Jobs\\DeliveryJob"
+  },
   "Hooks": {
     "PageSaveComplete": "PageSaveComplete"
   },
