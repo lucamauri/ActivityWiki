@@ -1,0 +1,7 @@
+{
+  "@metadata": {
+    "authors": ["Luca Mauri"]
+  },
+  "activitywiki-desc": "Description of the ActivityWiki extension, shown on Special:Version. Should be a short sentence describing what the extension does.",
+  "activitywiki-default-create-summary": "Fallback content string used in an ActivityPub activity when a page was created with no edit summary. This text is federated publicly to Fediverse followers — keep it neutral and brief. Do not translate markup or wiki syntax."
+}
