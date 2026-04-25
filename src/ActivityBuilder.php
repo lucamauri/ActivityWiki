@@ -96,14 +96,26 @@ class ActivityBuilder {
     }
 
     /**
-     * Format timestamp to ISO 8601 for ActivityPub
-     *
-     * @param string $timestamp MediaWiki timestamp (yyyymmddhhmmss)
-     * @return string ISO 8601 formatted timestamp
-     */
-    private function formatTimestamp( $timestamp ): string {
-        // Convert from MediaWiki format (yyyymmddhhmmss) to ISO 8601
+     * Format timestamp to ISO 8601 for ActivityPub.
+     * 
+     * Converts a MediaWiki internal timestamp (yyyymmddhhmmss) to an ISO 8601
+     * string as required by the ActivityPub spec (e.g. "2026-04-25T10:30:00+00:00").
+     * 
+     * 
+     * Falls back to the current time if the provided timestamp is malformed or
+     * empty, to avoid a fatal TypeError on DateTime method call failure.
+     * 
+     * @param string $timestamp MediaWiki timestamp in YmdHis format (e.g. "20260425103000")
+     * @return string ISO 8601 formatted timestamp (e.g. "2026-04-25T10:30:00+00:00")
+    */
+    private function formatTimestamp( string $timestamp ): string {
+        // DateTime::createFromFormat() returns false if the input does not match
+        // the expected format — we must guard against this before calling ->format()
         $dateTime = \DateTime::createFromFormat( 'YmdHis', $timestamp );
+        if ( $dateTime === false ) {
+            // Fallback: use current time rather than crashing
+            $dateTime = new \DateTime();
+        }
         return $dateTime->format( \DateTime::ATOM );
     }
 }
