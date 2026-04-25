@@ -1,70 +1,112 @@
 {
   "name": "ActivityWiki",
-  "version": "1.0.0",
+  "version": "0.1.0",
   "author": ["Luca Mauri"],
   "url": "https://github.com/lucamauri/ActivityWiki",
   "descriptionmsg": "activitywiki-desc",
   "license-name": "GPL-2.0-or-later",
-  "type": "api",
+  "type": "other",
   "manifest_version": 2,
 
   "requires": {
-    "MediaWiki": ">= 1.35.0"
+    "MediaWiki": ">= 1.41.0",
+    "platform": {
+      "php": ">= 8.0.0"
+    }
   },
 
   "config": {
-    "ActivityPubEnabled": {
+    "ActivityWikiEnabled": {
       "value": true,
-      "description": "Enable ActivityPub support in the wiki"
+      "description": "Master switch — enable or disable all ActivityWiki federation."
     },
-    "ActivityPubActorName": {
-      "value": "Wiki",
-      "description": "The name used for the wiki actor in the Fediverse"
+    "ActivityWikiActorName": {
+      "value": null,
+      "description": "Display name for the wiki actor on the Fediverse. Defaults to $wgSitename if null."
     },
-    "ActivityPubActorIcon": {
-      "value": "/logo.png",
-      "description": "URL to the wiki icon/logo for ActivityPub profile"
+    "ActivityWikiActorUsername": {
+      "value": null,
+      "description": "The handle for the wiki actor (the part before @domain). Defaults to a slugified $wgSitename if null."
     },
-    "ActivityPubEnableUserActors": {
-      "value": false,
-      "description": "Enable per-user ActivityPub actors (Phase 3+)"
+    "ActivityWikiActorSummary": {
+      "value": "",
+      "description": "Short bio shown on Mastodon and other Fediverse clients."
     },
-    "ActivityPubExcludedNamespaces": {
-      "value": [],
-      "description": "Array of namespace IDs to exclude from ActivityPub federation"
+    "ActivityWikiActorIcon": {
+      "value": "",
+      "description": "Absolute URL to the wiki logo used as the actor avatar. Empty string disables."
     },
-    "ActivityPubExcludeBots": {
+    "ActivityWikiKeySize": {
+      "value": 2048,
+      "description": "RSA key size in bits for HTTP Signature key pair generation. Minimum 2048, recommended 4096."
+    },
+    "ActivityWikiPublishCreations": {
       "value": true,
-      "description": "Exclude bot edits from ActivityPub activities"
+      "description": "Federate page creation events as ActivityPub Create activities."
     },
-    "ActivityPubExcludeMinor": {
+    "ActivityWikiPublishEdits": {
+      "value": true,
+      "description": "Federate page edit events as ActivityPub Update activities."
+    },
+    "ActivityWikiPublishDeletions": {
+      "value": true,
+      "description": "Federate page deletion events as ActivityPub Delete activities."
+    },
+    "ActivityWikiPublishMoves": {
+      "value": true,
+      "description": "Federate page move/rename events as ActivityPub Update activities."
+    },
+    "ActivityWikiPublishMinorEdits": {
       "value": false,
-      "description": "Exclude minor edits from ActivityPub activities"
+      "description": "Include minor edits in federation. False suppresses them to reduce follower noise."
     },
-    "ActivityPubDebugLevel": {
+    "ActivityWikiPublishProtections": {
+      "value": false,
+      "description": "Federate page protection change events."
+    },
+    "ActivityWikiPublishNamespaces": {
+      "value": [0],
+      "description": "Array of namespace IDs to federate. Default is main namespace only (0)."
+    },
+    "ActivityWikiExcerptLength": {
+      "value": 500,
+      "description": "Maximum plain-text excerpt length in characters included in activity content."
+    },
+    "ActivityWikiDeliveryRetries": {
+      "value": 3,
+      "description": "Number of retry attempts for failed HTTP deliveries to follower inboxes."
+    },
+    "ActivityWikiEnableUserActors": {
+      "value": false,
+      "description": "Enable per-user ActivityPub actors. Post-MVP feature — do not enable in production."
+    },
+    "ActivityWikiDebugLevel": {
       "value": 0,
-      "description": "Debug log level: 0=errors only, 1=verbose"
+      "description": "Debug verbosity: 0 = off, 1 = verbose logging to the ActivityWiki log channel."
     }
   },
 
   "MessagesDirs": {
-    "ActivityWiki": "i18n"
+    "ActivityWiki": ["i18n"]
   },
 
   "DatabaseSchemas": {
-    "activity_log": "db/activity_log.json"
+    "activitywiki_activities": "db/activitywiki_activities.json"
   },
 
   "HookHandlers": {
-    "PageSaveComplete": {
-      "class": "MediaWiki\\Extension\\ActivityWiki\\Hooks"
+    "main": {
+      "class": "MediaWiki\\Extension\\ActivityWiki\\Hooks",
+      "services": ["MainConfig", "DBLoadBalancerFactory", "JobQueueGroup"]
     }
   },
+
+  "Hooks": {
+    "PageSaveComplete": "main"
+  },
+
   "JobClasses": {
     "MediawikiActivityPubDelivery": "MediaWiki\\Extension\\ActivityWiki\\Jobs\\DeliveryJob"
-  },
-  "Hooks": {
-    "PageSaveComplete": "PageSaveComplete"
   },
 
   "RestModuleFiles": ["src/Rest/routes.json"],
