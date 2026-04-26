@@ -21,12 +21,12 @@
       "description": "Master switch — enable or disable all ActivityWiki federation."
     },
     "ActivityWikiActorName": {
-      "value": null,
-      "description": "Display name for the wiki actor on the Fediverse. Defaults to $wgSitename if null."
+      "value": "",
+      "description": "Display name for the wiki actor on the Fediverse. Defaults to $wgSitename if empty."
     },
     "ActivityWikiActorUsername": {
-      "value": null,
-      "description": "The handle for the wiki actor (the part before @domain). Defaults to a slugified $wgSitename if null."
+      "value": "",
+      "description": "The handle for the wiki actor (the part before @domain). Defaults to a slugified $wgSitename if empty."
     },
     "ActivityWikiActorSummary": {
       "value": "",
@@ -34,7 +34,7 @@
     },
     "ActivityWikiActorIcon": {
       "value": "",
-      "description": "Absolute URL to the wiki logo used as the actor avatar. Empty string disables."
+      "description": "Absolute URL to the wiki logo used as the actor avatar. Defaults to $wgFavicon if empty."
     },
     "ActivityWikiKeySize": {
       "value": 2048,

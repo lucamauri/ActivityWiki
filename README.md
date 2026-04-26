@@ -71,6 +71,74 @@ $wgActivityWikiExcerptLength = 500;
 $wgActivityWikiDebugLevel = 0;
 ```
 
+### WebFinger routing
+
+The WebFinger protocol requires that the URL `/.well-known/webfinger` be reachable
+at the root of your domain. MediaWiki does not control the document root, so you
+must add a rewrite rule to your web server configuration to forward requests to
+the extension's internal REST endpoint.
+
+#### Apache
+
+Add the following rule to your `.htaccess` or VirtualHost configuration, **before**
+the existing MediaWiki rewrite rules:
+
+```apache
+# ActivityWiki — WebFinger discovery endpoint
+# Replace /wt/ with your $wgScriptPath (may be empty, e.g. just /rest.php/...)
+RewriteRule ^\.well-known/webfinger$ /wt/rest.php/activitywiki/webfinger [QSA,L]
+```
+
+The `QSA` flag (Query String Append) ensures the `?resource=acct:...` parameter
+is passed through to MediaWiki. The `L` flag stops processing further rules.
+
+#### Nginx
+
+Add the following block to your server configuration:
+
+```nginx
+# ActivityWiki — WebFinger discovery endpoint
+location = /.well-known/webfinger {
+    # Replace /wt/ with your $wgScriptPath
+    rewrite ^ /wt/rest.php/activitywiki/webfinger last;
+}
+```
+
+#### Verifying the setup
+
+Once the rewrite rule is in place, test it with curl:
+
+```bash
+curl -s "https://yourwiki.example.org/.well-known/webfinger?resource=acct:yourhandle@yourwiki.example.org" | python3 -m json.tool
+```
+
+A correct response looks like this:
+
+```json
+{
+    "subject": "acct:wikitrek@wikitrek.org",
+    "aliases": [
+        "https://wikitrek.org/wt/rest.php/activitywiki/actor"
+    ],
+    "links": [
+        {
+            "rel": "self",
+            "type": "application/activity+json",
+            "href": "https://wikitrek.org/wt/rest.php/activitywiki/actor"
+        },
+        {
+            "rel": "http://webfinger.net/rel/profile-page",
+            "type": "text/html",
+            "href": "https://wikitrek.org/wt/index.php"
+        }
+    ]
+}
+```
+
+If you get a 404 from Apache/Nginx (not from MediaWiki), the rewrite rule is not
+being applied. If you get a 404 from MediaWiki, the resource parameter does not
+match your configured actor username or domain.
+
 ## Repository Structure
 
 ```
