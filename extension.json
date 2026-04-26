@@ -14,7 +14,7 @@
       "php": ">= 8.0.0"
     }
   },
-
+  "ServiceWiringFiles": ["src/ServiceWiring.php"],
   "config": {
     "ActivityWikiEnabled": {
       "value": true,
@@ -91,18 +91,23 @@
   },
 
   "DatabaseSchemas": {
-    "activitywiki_activities": "db/activitywiki_activities.json"
+    "activitywiki_activities": "db/activitywiki_activities.json",
+    "activitywiki_keys": "db/activitywiki_keys.json"
   },
 
   "HookHandlers": {
     "main": {
       "class": "MediaWiki\\Extension\\ActivityWiki\\Hooks",
       "services": ["MainConfig", "DBLoadBalancerFactory", "JobQueueGroup"]
+    },
+    "schema": {
+      "class": "MediaWiki\\Extension\\ActivityWiki\\SchemaHooks"
     }
   },
 
   "Hooks": {
-    "PageSaveComplete": "main"
+    "PageSaveComplete": "main",
+    "LoadExtensionSchemaUpdates": "schema"
   },
 
   "JobClasses": {

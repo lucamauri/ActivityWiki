@@ -1,0 +1,38 @@
+{
+  "name": "activitywiki_keys",
+  "comment": "Stores the RSA key pair used by ActivityWiki to sign outbound HTTP requests. Only one active row is expected at any time. Key rotation replaces this row via the GenerateKeys maintenance script.",
+  "columns": [
+    {
+      "name": "key_id",
+      "comment": "Auto-incremented surrogate primary key. Exists to satisfy MediaWiki schema conventions; in practice only one row will exist.",
+      "type": "integer",
+      "options": { "notnull": true, "autoincrement": true }
+    },
+    {
+      "name": "public_key_pem",
+      "comment": "PEM-encoded RSA public key. Exposed publicly via the ActivityPub actor object so that remote servers can verify HTTP Signatures.",
+      "type": "blob",
+      "options": { "notnull": true, "length": 65535 }
+    },
+    {
+      "name": "private_key_pem",
+      "comment": "PEM-encoded RSA private key. Never exposed publicly. Used to sign outbound HTTP POST requests to follower inboxes.",
+      "type": "blob",
+      "options": { "notnull": true, "length": 65535 }
+    },
+    {
+      "name": "key_size",
+      "comment": "RSA key size in bits at the time of generation. Recorded for auditing purposes (e.g. to detect keys generated below the recommended 4096-bit threshold).",
+      "type": "integer",
+      "options": { "notnull": true }
+    },
+    {
+      "name": "generated_at",
+      "comment": "Timestamp when this key pair was generated. Used for auditing and to surface key age in the future Special:ActivityWiki status page.",
+      "type": "datetimetz",
+      "options": { "notnull": true }
+    }
+  ],
+  "indexes": [],
+  "pk": ["key_id"]
+}
