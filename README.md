@@ -73,10 +73,134 @@ $wgActivityWikiDebugLevel = 0;
 
 ### WebFinger routing
 
-The WebFinger protocol requires that the URL `/.well-known/webfinger` be reachable
-at the root of your domain. MediaWiki does not control the document root, so you
-must add a rewrite rule to your web server configuration to forward requests to
-the extension's internal REST endpoint.
+The WebFinger protocol (RFC 7033) requires that `/.well-known/webfinger` be
+served at the root of your domain. MediaWiki does not control the document root,
+so two installation steps are required.
+
+#### Why a separate entry-point file is needed
+
+MediaWiki's REST router validates that every incoming `REQUEST_URI` starts with
+the REST base path (e.g. `/wt/rest.php`). A plain Apache rewrite preserves the
+original `REQUEST_URI`, causing the router to reject the request with a
+`rest-prefix-mismatch` error — even though the route and handler are correctly
+registered.
+
+This is a MediaWiki-specific constraint. Other frameworks (WordPress, XWiki)
+handle `.well-known` routing transparently because their routers do not validate
+`REQUEST_URI`. The solution is a thin entry-point file (`webfinger.php`) that
+rewrites `REQUEST_URI` before MediaWiki boots, then delegates entirely to
+`rest.php`. It contains no business logic — all WebFinger handling remains in
+`WebFingerHandler.php`.
+
+> **Future improvement:** A MediaWiki core patch to accept configurable base
+> path prefixes would make `webfinger.php` unnecessary. This is worth
+> contributing upstream separately.
+
+---
+
+#### Step 1 — Copy the entry-point file
+
+Copy `entry-points/webfinger.php` from the extension to your MediaWiki script
+directory (the same directory that contains `rest.php`):
+
+```bash
+cp extensions/ActivityWiki/entry-points/webfinger.php /var/www/mw/wt/webfinger.php
+```
+
+Then open the file and update the hardcoded path on line 47 to match your
+`$wgScriptPath`. For example:
+
+```php
+// If your $wgScriptPath is /wiki, change /wt/ to /wiki/
+$_SERVER['REQUEST_URI'] = '/wt/rest.php/activitywiki/webfinger' ...
+```
+
+---
+
+#### Step 2 — Add the Apache rewrite rule
+
+Add the following rule to your VirtualHost configuration **before** the existing
+MediaWiki rewrite rules. Use `%{DOCUMENT_ROOT}` so the path resolves correctly
+regardless of the Apache working directory:
+
+```apache
+# ActivityWiki — WebFinger discovery endpoint
+# Replace /wt/ with your $wgScriptPath
+RewriteRule ^/\.well-known/webfinger$ %{DOCUMENT_ROOT}/wt/webfinger.php [QSA,L]
+```
+
+The `QSA` flag (Query String Append) ensures the `?resource=acct:...` parameter
+is passed through. The `L` flag stops further rule processing.
+
+##### Nginx equivalent
+
+```nginx
+# ActivityWiki — WebFinger discovery endpoint
+# Replace /wt/ with your $wgScriptPath
+location = /.well-known/webfinger {
+    fastcgi_param REQUEST_URI /wt/rest.php/activitywiki/webfinger;
+    fastcgi_param QUERY_STRING $query_string;
+    # ... your existing fastcgi_pass settings
+}
+```
+
+##### Behind a reverse proxy (Anubis, Varnish, etc.)
+
+If your setup uses a reverse proxy in front of Apache, ensure that
+`/.well-known/` paths are passed through to MediaWiki without interception.
+Most proxy configurations already do this for Let's Encrypt compatibility.
+Check your proxy's bot policy or passthrough rules if WebFinger returns an
+unexpected response.
+
+---
+
+#### Verifying the setup
+
+After reloading Apache, test with curl:
+
+```bash
+curl -s "https://yourwiki.example.org/.well-known/webfinger?resource=acct:yourhandle@yourwiki.example.org" \
+  | python3 -m json.tool
+```
+
+A correct response looks like this:
+
+```json
+{
+    "subject": "acct:wikitrek@wikitrek.org",
+    "aliases": [
+        "https://wikitrek.org/wt/rest.php/activitywiki/actor"
+    ],
+    "links": [
+        {
+            "rel": "self",
+            "type": "application/activity+json",
+            "href": "https://wikitrek.org/wt/rest.php/activitywiki/actor"
+        },
+        {
+            "rel": "http://webfinger.net/rel/profile-page",
+            "type": "text/html",
+            "href": "https://wikitrek.org/wt/index.php"
+        }
+    ]
+}
+```
+
+An invalid resource should return a 404 with a JSON error body:
+
+```bash
+curl -s "https://yourwiki.example.org/.well-known/webfinger?resource=acct:nobody@yourwiki.example.org"
+# {"error":"Resource not found on this server."}
+```
+
+##### Troubleshooting
+
+| Symptom | Cause | Fix |
+|---------|-------|-----|
+| Empty response or Apache 404 | Rewrite rule not applied or in wrong VirtualHost | Verify the rule is inside the VirtualHost block that receives public HTTPS traffic |
+| `rest-prefix-mismatch` JSON error | `webfinger.php` not in place or wrong path inside it | Check Step 1; verify `$wgScriptPath` matches the hardcoded path in `webfinger.php` |
+| 403 from Apache | Proxy forwarding with wrong `Host` header | Check proxy passthrough config for `/.well-known/` |
+| MediaWiki 404 (JSON, with `X-Request-Id`) | Route not registered | Verify `routes.json` contains the webfinger route; check extension is enabled |
 
 #### Apache
 
@@ -176,7 +300,7 @@ ActivityWiki/
 - Modernise deprecated MW API calls
 - Rename all config keys to `ActivityWiki*` prefix
 
-### Phase 1 — Identity (planned)
+### Phase 1 — Identity ✅
 - Complete actor object endpoint
 - Implement WebFinger endpoint for Fediverse discoverability
 
