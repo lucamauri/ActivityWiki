@@ -20,6 +20,7 @@ declare( strict_types=1 );
  * @package MediaWiki\Extension\ActivityWiki
  */
 
+use MediaWiki\Extension\ActivityWiki\HttpSigner;
 use MediaWiki\Extension\ActivityWiki\KeyManager;
 use MediaWiki\MediaWikiServices;
 
@@ -47,5 +48,13 @@ return [
 			$services->getDBLoadBalancerFactory()
 		);
 	},
-
+	
+	'ActivityWiki.HttpSigner' => static function ( MediaWikiServices $services ): HttpSigner {
+		return new HttpSigner(
+			// KeyManager provides getPrivateKeyPem() for signing.
+			$services->get( 'ActivityWiki.KeyManager' ),
+			// MainConfig provides Server and ScriptPath for building keyId.
+			$services->getMainConfig()
+		);
+	},
 ];
