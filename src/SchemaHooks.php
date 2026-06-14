@@ -45,15 +45,18 @@ class SchemaHooks
 	 */
 	public static function onLoadExtensionSchemaUpdates(DatabaseUpdater $updater): void
 	{
-		$dbType = $updater->getDB()->getType();
-
 		$updater->addExtensionTable(
 			'activitywiki_keys',
 			dirname( __DIR__ ) . '/db/activitywiki_keys.sql'
 		);
-		
+
+		$updater->addExtensionTable(
+        	'activitywiki_followers',
+        	dirname( __DIR__ ) . '/db/activitywiki_followers.sql'
+    	);
+
 		$updater->addExtensionUpdate([
-			[self::class, 'generateInitialKeyPair'],
+    	    [self::class, 'generateInitialKeyPair'],
 		]);
 	}
 

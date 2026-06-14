@@ -91,7 +91,8 @@
   },
 
   "DatabaseSchemas": {
-    "activitywiki_activities": "db/activitywiki_activities.json"
+    "activitywiki_activities": "db/activitywiki_activities.json",
+    "activitywiki_followers": "db/activitywiki_followers.sql"
   },
 
   "HookHandlers": {
