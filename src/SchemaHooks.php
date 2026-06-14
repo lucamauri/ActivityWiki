@@ -1,11 +1,12 @@
 <?php
 
-declare( strict_types=1 );
+declare(strict_types=1);
 
 namespace MediaWiki\Extension\ActivityWiki;
 
 use MediaWiki\Installer\DatabaseUpdater;
 use MediaWiki\MediaWikiServices;
+use Wikimedia\Rdbms\DBQueryError;
 
 /**
  * SchemaHooks — handles database schema updates for ActivityWiki.
@@ -26,7 +27,8 @@ use MediaWiki\MediaWikiServices;
  *
  * @package MediaWiki\Extension\ActivityWiki
  */
-class SchemaHooks {
+class SchemaHooks
+{
 
 	/**
 	 * Handler for the LoadExtensionSchemaUpdates hook.
@@ -42,7 +44,8 @@ class SchemaHooks {
 	 * @param DatabaseUpdater $updater The MediaWiki database updater instance.
 	 * @return void
 	 */
-	public static function onLoadExtensionSchemaUpdates( DatabaseUpdater $updater ): void {
+	public static function onLoadExtensionSchemaUpdates(DatabaseUpdater $updater): void
+	{
 		$dbType = $updater->getDB()->getType();
 
 		// addExtensionTable() registers the table creation. MediaWiki will
@@ -54,7 +57,7 @@ class SchemaHooks {
 			// The second argument is the path to the abstract schema JSON file.
 			// __DIR__ resolves to src/, so we navigate up one level to the
 			// extension root and then into db/.
-			dirname( __DIR__ ) . '/db/activitywiki_keys.json'
+			dirname(__DIR__) . '/db/activitywiki_keys.json'
 		);
 
 		// addExtensionUpdate() queues a callback to run after all schema
@@ -66,9 +69,9 @@ class SchemaHooks {
 		// We use this to generate the RSA key pair on first install. The
 		// callback is a static method on this class so it is serializable
 		// (anonymous functions are not allowed here by the MW API).
-		$updater->addExtensionUpdate( [
-			[ self::class, 'generateInitialKeyPair' ],
-		] );
+		$updater->addExtensionUpdate([
+			[self::class, 'generateInitialKeyPair'],
+		]);
 	}
 
 	/**
@@ -86,43 +89,62 @@ class SchemaHooks {
 	 * Key rotation is explicitly NOT done here — that requires the operator to
 	 * run maintenance/GenerateKeys.php with a manual confirmation step.
 	 *
+	 * Note on the DBQueryError catch: addExtensionUpdate() callbacks run after
+	 * schema changes are applied on the primary connection, but hasKey() queries
+	 * the replica. On first install the replica may not yet see the newly created
+	 * table, causing a DBQueryError. We treat this identically to "no key exists"
+	 * and proceed to generate one. generateAndStoreKeyPair() writes to the primary,
+	 * which always has the table at this point.
+	 *
 	 * @param DatabaseUpdater $updater Passed automatically by runUpdates().
 	 * @return void
 	 */
-	public static function generateInitialKeyPair( DatabaseUpdater $updater ): void {
-		// Obtain the KeyManager service from the global service container.
-		// We use MediaWikiServices::getInstance() here rather than constructor
-		// injection because this is a static callback — it has no object context.
-		// This is the accepted pattern for static hook handlers in MediaWiki.
+	public static function generateInitialKeyPair(DatabaseUpdater $updater): void
+	{
+	// Obtain the KeyManager service from the global service container.
+	// We use MediaWikiServices::getInstance() here rather than constructor
+	// injection because this is a static callback — it has no object context.
+	// This is the accepted pattern for static hook handlers in MediaWiki.
 		/** @var KeyManager $keyManager */
 		$keyManager = MediaWikiServices::getInstance()
-			->getService( 'ActivityWiki.KeyManager' );
+			->getService('ActivityWiki.KeyManager');
 
-		// hasKey() queries the replica DB. If a row already exists, we skip
-		// generation entirely — this makes the callback idempotent and safe
-		// to run on upgrades where the key was already generated on install.
-		if ( $keyManager->hasKey() ) {
-			$updater->output( "...ActivityWiki RSA key pair already exists, skipping.\n" );
-			return;
+		// Check whether a key pair already exists. This makes the callback
+		// idempotent — safe to run on upgrades where the key was already
+		// generated on install.
+		//
+		// On a fresh install the replica may not yet see the newly created table
+		// (replication lag or same-connection transaction visibility). In that
+		// case hasKey() throws DBQueryError, which we catch below and treat as
+		// "no key exists" — the same outcome as an empty table.
+		try {
+			if ($keyManager->hasKey()) {
+				$updater->output("...ActivityWiki RSA key pair already exists, skipping.\n");
+				return;
+			}
+		} catch (DBQueryError $e) {
+			// Table not yet visible on the replica connection — this is expected
+			// on first install. Fall through and generate the key pair below.
+			// The primary connection (used by generateAndStoreKeyPair) always
+			// has the table at this point because addExtensionTable() already ran.
 		}
 
-		$updater->output( "Generating ActivityWiki RSA key pair..." );
+		$updater->output("Generating ActivityWiki RSA key pair...");
 
 		try {
 			$keyManager->generateAndStoreKeyPair();
-			$updater->output( "done.\n" );
-		} catch ( \RuntimeException $e ) {
+			$updater->output("done.\n");
+		} catch (\RuntimeException $e) {
 			// Output the error but do not re-throw. A missing key pair means
 			// HTTP Signatures will not work, but the wiki itself will still
 			// function. The operator can run maintenance/GenerateKeys.php to
 			// retry after fixing any OpenSSL configuration issue.
-			$updater->output( "FAILED.\n" );
+			$updater->output("FAILED.\n");
 			$updater->output(
 				"WARNING: ActivityWiki could not generate an RSA key pair.\n" .
-				"Error: " . $e->getMessage() . "\n" .
-				"Run maintenance/GenerateKeys.php to retry after fixing the issue.\n"
+					"Error: " . $e->getMessage() . "\n" .
+					"Run maintenance/GenerateKeys.php to retry after fixing the issue.\n"
 			);
 		}
 	}
-
 }
