@@ -3,7 +3,7 @@
     "path": "/activitywiki/actor",
     "method": "GET",
     "class": "MediaWiki\\Extension\\ActivityWiki\\Rest\\ActorHandler",
-    "services": ["MainConfig"]
+    "services": ["MainConfig", "ActivityWiki.KeyManager"]
   },
   {
     "path": "/activitywiki/outbox",
