@@ -1,6 +1,6 @@
 {
   "name": "lucamauri/activitywiki",
-  "description": "ActivityPub support for MediaWiki - Integrate your MediaWiki instance with the Fediverse via ActivityPub.",
+  "description": "ActivityPub support for MediaWiki — integrate your wiki with the Fediverse via ActivityPub.",
   "keywords": [
     "mediawiki",
     "activitypub",
@@ -18,13 +18,13 @@
     }
   ],
   "require": {
-    "php": ">=7.2.0"
+    "php": ">=8.0.0"
   },
   "require-dev": {
     "squizlabs/php_codesniffer": "^3.7",
-    "phpunit/phpunit": "^9.5",
-    "mediawiki/mediawiki-codesniffer": "38.0.0",
-    "mediawiki/mediawiki-phan-config": "0.12.1"
+    "phpunit/phpunit": "^10.0",
+    "mediawiki/mediawiki-codesniffer": "^45.0",
+    "mediawiki/mediawiki-phan-config": "^0.14.0"
   },
   "scripts": {
     "test": "phpunit",
@@ -33,11 +33,12 @@
   },
   "autoload": {
     "psr-4": {
-      "MediawikiActivityPub\\": "includes/"
+      "MediaWiki\\Extension\\ActivityWiki\\": "src/"
     }
   },
   "config": {
     "allow-plugins": {
+      "composer/installers": true,
       "mediawiki/mediawiki-codesniffer": true,
       "mediawiki/mediawiki-phan-config": true
     }

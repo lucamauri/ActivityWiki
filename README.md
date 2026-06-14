@@ -4,34 +4,15 @@ Integrate your MediaWiki instance with the Fediverse via ActivityPub.
 
 ## Overview
 
-ActivityWiki is a MediaWiki extension that enables wiki instances to participate in the Fediverse by implementing the ActivityPub protocol. This allows:
+ActivityWiki is a MediaWiki extension that enables wiki instances to participate in the Fediverse by implementing the [ActivityPub](https://www.w3.org/TR/activitypub/) W3C protocol. Once complete, it will allow Mastodon users and other Fediverse participants to follow your wiki and receive notifications when pages are created, edited, or deleted — directly in their Fediverse timeline.
 
-- **Share wiki activity**: Article creation and modifications are broadcast to the Fediverse
-- **User attribution**: Track which user made edits and attribute contributions accurately
-- **Discoverability**: Make your wiki discoverable to Mastodon, Pixelfed, and other ActivityPub-compatible platforms
-- **Federation**: Connect your wiki with other federated services
-
-## Features
-
-### Current (Phase 1)
-- ✅ Wiki actor profile (ActivityPub compatible)
-- ✅ Activity creation for page edits (Create/Update)
-- ✅ REST API endpoints for ActivityPub discovery
-- ✅ Activity logging and storage
-- ✅ Configuration management
-
-### Planned (Phase 2+)
-- 🔄 HTTP signature delivery to follower inboxes
-- 🔄 Receive Follow/Unfollow requests
-- 🔄 Per-user ActivityPub actor profiles
-- 🔄 Inbox endpoint for incoming activities
+> ⚠️ **This extension is in early development.** The database layer and hook infrastructure are in place, but HTTP delivery to follower inboxes, the inbox endpoint, and HTTP Signatures are not yet implemented. The extension does not yet federate content to the Fediverse. See the Roadmap section below for the current status of each feature.
 
 ## Requirements
 
-- MediaWiki 1.35 or later
-- PHP 7.2 or later
-- Database: MySQL/MariaDB or PostgreSQL
-- HTTP access to external Fediverse servers (for Phase 2+)
+- MediaWiki 1.41 or later
+- PHP 8.0 or later
+- MariaDB / MySQL
 
 ## Installation
 
@@ -40,19 +21,12 @@ ActivityWiki is a MediaWiki extension that enables wiki instances to participate
 ```bash
 cd /path/to/your/mediawiki/extensions
 git clone https://github.com/lucamauri/ActivityWiki.git ActivityWiki
-cd ActivityWiki
 ```
 
 ### 2. Add to LocalSettings.php
 
 ```php
-// Enable ActivityWiki extension
 wfLoadExtension( 'ActivityWiki' );
-
-// Configuration (optional)
-$wgActivityPubEnabled = true;
-$wgActivityPubActorName = 'MyWiki';  // Display name in Fediverse
-$wgActivityPubEnableUserActors = false;  // Per-user actors (Phase 3)
 ```
 
 ### 3. Run database setup
@@ -61,239 +35,325 @@ $wgActivityPubEnableUserActors = false;  // Per-user actors (Phase 3)
 php maintenance/run.php update.php
 ```
 
-This creates the necessary database tables.
-
-### 4. Verify installation
-
-Visit: `https://your-wiki.example.com/api/rest_v1/activitypub/actor`
-
-You should see a JSON ActivityPub actor profile.
-
 ## Configuration
 
-### Basic Settings (LocalSettings.php)
+All configuration variables are optional. The defaults are shown below.
 
 ```php
-// Enable/disable the extension
-$wgActivityPubEnabled = true;
+// Master switch — disable to pause all federation without uninstalling
+$wgActivityWikiEnabled = true;
 
-// How the wiki appears in the Fediverse
-$wgActivityPubActorName = 'My Wiki';
+// Display name shown on Mastodon and other Fediverse clients
+// Defaults to $wgSitename if not set
+$wgActivityWikiActorName = null;
 
-// Optional: Enable per-user ActivityPub actors
-$wgActivityPubEnableUserActors = false;
+// The handle for the wiki actor (the part before @domain)
+// Defaults to a slugified $wgSitename if not set
+$wgActivityWikiActorUsername = null;
 
-// Optional: Exclude certain namespaces from federation
-$wgActivityPubExcludedNamespaces = [ NS_TEMPLATE, NS_CATEGORY ];
+// Short bio shown on Mastodon profile
+$wgActivityWikiActorSummary = '';
 
-// Optional: Exclude bot edits from ActivityPub feed
-$wgActivityPubExcludeBots = true;
+// Namespaces to federate — default is main namespace only
+$wgActivityWikiPublishNamespaces = [ NS_MAIN ];
 
-// Optional: Exclude minor edits
-$wgActivityPubExcludeMinor = false;
+// Which event types to federate
+$wgActivityWikiPublishCreations  = true;
+$wgActivityWikiPublishEdits      = true;
+$wgActivityWikiPublishDeletions  = true;
+$wgActivityWikiPublishMoves      = true;
+$wgActivityWikiPublishMinorEdits = false;  // Minor edits suppressed by default
+
+// Maximum plain-text excerpt length in characters included in activities
+$wgActivityWikiExcerptLength = 500;
+
+// Debug logging (0 = off, 1 = verbose)
+$wgActivityWikiDebugLevel = 0;
 ```
 
-## API Endpoints
+### WebFinger routing
 
-Once installed, the following ActivityPub endpoints become available:
+The WebFinger protocol (RFC 7033) requires that `/.well-known/webfinger` be
+served at the root of your domain. MediaWiki does not control the document root,
+so two installation steps are required.
 
-### Actor Profile
+#### Why a separate entry-point file is needed
+
+MediaWiki's REST router validates that every incoming `REQUEST_URI` starts with
+the REST base path (e.g. `/wt/rest.php`). A plain Apache rewrite preserves the
+original `REQUEST_URI`, causing the router to reject the request with a
+`rest-prefix-mismatch` error — even though the route and handler are correctly
+registered.
+
+This is a MediaWiki-specific constraint. Other frameworks (WordPress, XWiki)
+handle `.well-known` routing transparently because their routers do not validate
+`REQUEST_URI`. The solution is a thin entry-point file (`webfinger.php`) that
+rewrites `REQUEST_URI` before MediaWiki boots, then delegates entirely to
+`rest.php`. It contains no business logic — all WebFinger handling remains in
+`WebFingerHandler.php`.
+
+> **Future improvement:** A MediaWiki core patch to accept configurable base
+> path prefixes would make `webfinger.php` unnecessary. This is worth
+> contributing upstream separately.
+
+---
+
+#### Step 1 — Copy the entry-point file
+
+Copy `entry-points/webfinger.php` from the extension to your MediaWiki script
+directory (the same directory that contains `rest.php`):
+
+```bash
+cp extensions/ActivityWiki/entry-points/webfinger.php /var/www/mw/wt/webfinger.php
 ```
-GET /api/rest_v1/activitypub/actor
-```
-Returns the wiki's ActivityPub actor profile (Service type).
 
-**Response:**
-```json
-{
-  "@context": "https://www.w3.org/ns/activitystreams",
-  "id": "https://your-wiki.example.com/api/rest_v1/activitypub/actor",
-  "type": "Service",
-  "name": "My Wiki",
-  "preferredUsername": "mywiki",
-  "inbox": "https://your-wiki.example.com/api/rest_v1/activitypub/inbox",
-  "outbox": "https://your-wiki.example.com/api/rest_v1/activitypub/outbox",
-  "followers": "https://your-wiki.example.com/api/rest_v1/activitypub/followers",
-  "publicKey": { ... },
-  "summary": "The My Wiki wiki"
+Then open the file and update the hardcoded path on line 47 to match your
+`$wgScriptPath`. For example:
+
+```php
+// If your $wgScriptPath is /wiki, change /wt/ to /wiki/
+$_SERVER['REQUEST_URI'] = '/wt/rest.php/activitywiki/webfinger' ...
+```
+
+---
+
+#### Step 2 — Add the Apache rewrite rule
+
+Add the following rule to your VirtualHost configuration **before** the existing
+MediaWiki rewrite rules. Use `%{DOCUMENT_ROOT}` so the path resolves correctly
+regardless of the Apache working directory:
+
+```apache
+# ActivityWiki — WebFinger discovery endpoint
+# Replace /wt/ with your $wgScriptPath
+RewriteRule ^/\.well-known/webfinger$ %{DOCUMENT_ROOT}/wt/webfinger.php [QSA,L]
+```
+
+The `QSA` flag (Query String Append) ensures the `?resource=acct:...` parameter
+is passed through. The `L` flag stops further rule processing.
+
+##### Nginx equivalent
+
+```nginx
+# ActivityWiki — WebFinger discovery endpoint
+# Replace /wt/ with your $wgScriptPath
+location = /.well-known/webfinger {
+    fastcgi_param REQUEST_URI /wt/rest.php/activitywiki/webfinger;
+    fastcgi_param QUERY_STRING $query_string;
+    # ... your existing fastcgi_pass settings
 }
 ```
 
-### Activity Outbox
+##### Behind a reverse proxy (Anubis, Varnish, etc.)
+
+If your setup uses a reverse proxy in front of Apache, ensure that
+`/.well-known/` paths are passed through to MediaWiki without interception.
+Most proxy configurations already do this for Let's Encrypt compatibility.
+Check your proxy's bot policy or passthrough rules if WebFinger returns an
+unexpected response.
+
+---
+
+#### Verifying the setup
+
+After reloading Apache, test with curl:
+
+```bash
+curl -s "https://yourwiki.example.org/.well-known/webfinger?resource=acct:yourhandle@yourwiki.example.org" \
+  | python3 -m json.tool
 ```
-GET /api/rest_v1/activitypub/outbox?limit=10&page=1
-```
-Returns paginated list of activities (Create/Update).
 
-### Followers
-```
-GET /api/rest_v1/activitypub/followers
-```
-Returns list of Fediverse accounts following your wiki.
-
-## Usage
-
-### Following Your Wiki
-
-1. Open your Fediverse client (Mastodon, Pixelfed, etc.)
-2. Search for: `@yourwikiname@your-wiki.example.com`
-3. Click Follow
-4. When users edit articles, activities appear in your Fediverse feed
-
-### Example Activity
-
-When a user edits an article, an Activity is created:
+A correct response looks like this:
 
 ```json
 {
-  "@context": "https://www.w3.org/ns/activitystreams",
-  "type": "Create",
-  "actor": "https://your-wiki.example.com/api/rest_v1/activitypub/actor",
-  "object": {
-    "type": "Article",
-    "name": "Example Article",
-    "url": "https://your-wiki.example.com/wiki/Example_Article",
-    "content": "Article content...",
-    "attributedTo": "https://your-wiki.example.com/api/rest_v1/activitypub/actor"
-  },
-  "published": "2025-12-08T22:17:00Z"
+    "subject": "acct:wikitrek@wikitrek.org",
+    "aliases": [
+        "https://wikitrek.org/wt/rest.php/activitywiki/actor"
+    ],
+    "links": [
+        {
+            "rel": "self",
+            "type": "application/activity+json",
+            "href": "https://wikitrek.org/wt/rest.php/activitywiki/actor"
+        },
+        {
+            "rel": "http://webfinger.net/rel/profile-page",
+            "type": "text/html",
+            "href": "https://wikitrek.org/wt/index.php"
+        }
+    ]
 }
 ```
 
-## Development
+An invalid resource should return a 404 with a JSON error body:
 
-### Repository Structure
+```bash
+curl -s "https://yourwiki.example.org/.well-known/webfinger?resource=acct:nobody@yourwiki.example.org"
+# {"error":"Resource not found on this server."}
+```
+
+##### Troubleshooting
+
+| Symptom | Cause | Fix |
+|---------|-------|-----|
+| Empty response or Apache 404 | Rewrite rule not applied or in wrong VirtualHost | Verify the rule is inside the VirtualHost block that receives public HTTPS traffic |
+| `rest-prefix-mismatch` JSON error | `webfinger.php` not in place or wrong path inside it | Check Step 1; verify `$wgScriptPath` matches the hardcoded path in `webfinger.php` |
+| 403 from Apache | Proxy forwarding with wrong `Host` header | Check proxy passthrough config for `/.well-known/` |
+| MediaWiki 404 (JSON, with `X-Request-Id`) | Route not registered | Verify `routes.json` contains the webfinger route; check extension is enabled |
+
+#### Apache
+
+Add the following rule to your `.htaccess` or VirtualHost configuration, **before**
+the existing MediaWiki rewrite rules:
+
+```apache
+# ActivityWiki — WebFinger discovery endpoint
+# Replace /wt/ with your $wgScriptPath (may be empty, e.g. just /rest.php/...)
+RewriteRule ^\.well-known/webfinger$ /wt/rest.php/activitywiki/webfinger [QSA,L]
+```
+
+The `QSA` flag (Query String Append) ensures the `?resource=acct:...` parameter
+is passed through to MediaWiki. The `L` flag stops processing further rules.
+
+#### Nginx
+
+Add the following block to your server configuration:
+
+```nginx
+# ActivityWiki — WebFinger discovery endpoint
+location = /.well-known/webfinger {
+    # Replace /wt/ with your $wgScriptPath
+    rewrite ^ /wt/rest.php/activitywiki/webfinger last;
+}
+```
+
+#### Verifying the setup
+
+Once the rewrite rule is in place, test it with curl:
+
+```bash
+curl -s "https://yourwiki.example.org/.well-known/webfinger?resource=acct:yourhandle@yourwiki.example.org" | python3 -m json.tool
+```
+
+A correct response looks like this:
+
+```json
+{
+    "subject": "acct:wikitrek@wikitrek.org",
+    "aliases": [
+        "https://wikitrek.org/wt/rest.php/activitywiki/actor"
+    ],
+    "links": [
+        {
+            "rel": "self",
+            "type": "application/activity+json",
+            "href": "https://wikitrek.org/wt/rest.php/activitywiki/actor"
+        },
+        {
+            "rel": "http://webfinger.net/rel/profile-page",
+            "type": "text/html",
+            "href": "https://wikitrek.org/wt/index.php"
+        }
+    ]
+}
+```
+
+If you get a 404 from Apache/Nginx (not from MediaWiki), the rewrite rule is not
+being applied. If you get a 404 from MediaWiki, the resource parameter does not
+match your configured actor username or domain.
+
+## Repository Structure
 
 ```
 ActivityWiki/
-├── extension.json           # Extension metadata
-├── README.md               # This file
-├── includes/
-│   ├── Hooks.php           # MediaWiki hook handlers
-│   ├── ActivityBuilder.php  # Build ActivityPub JSON
-│   ├── DeliveryQueue.php    # Queue activities
+├── extension.json                  # Extension metadata and service wiring
+├── composer.json                   # PHP dependencies
+├── README.md                       # This file
+├── i18n/                           # Localisation files
+│   ├── en.json
+│   ├── it.json
+│   └── qqq.json
+├── src/
+│   ├── Hooks.php                   # PageSaveComplete hook handler
+│   ├── ActivityBuilder.php         # Builds ActivityPub activity arrays
+│   ├── DeliveryQueue.php           # Persists activities and enqueues jobs
 │   ├── Api/
-│   │   └── ActivityPubModule.php  # REST endpoints
-│   └── Jobs/
-│       └── DeliveryJob.php  # Async delivery job
+│   │   └── ActivityPubModule.php   # Actor/outbox/followers data layer
+│   ├── Jobs/
+│   │   └── DeliveryJob.php         # Async delivery job (stub — Layer 3)
+│   └── Rest/
+│       ├── ActorHandler.php        # GET /activitywiki/actor
+│       ├── OutboxHandler.php       # GET /activitywiki/outbox
+│       ├── FollowersHandler.php    # GET /activitywiki/followers
+│       └── routes.json             # REST route definitions
 ├── db/
-│   └── tables.sql          # Database schema
-└── tests/
-    └── phpunit/            # Unit tests
+│   └── activitywiki_activities.json  # Abstract schema for MW updater
+└── maintenance/
+    └── (maintenance scripts — added in Layer 5)
 ```
-
-### Running Tests
-
-```bash
-cd /path/to/mediawiki
-php tests/phpunit/phpunit.php extensions/ActivityWiki/tests
-```
-
-### Code Style
-
-This extension follows MediaWiki coding standards:
-- PSR-12 for PHP
-- 4-space indentation
-- No trailing whitespace
-
-### Contributing
-
-We welcome contributions! Please:
-
-1. Fork the repository
-2. Create a feature branch (`git checkout -b feature/my-feature`)
-3. Commit changes (`git commit -m 'Add my feature'`)
-4. Push to the branch (`git push origin feature/my-feature`)
-5. Open a Pull Request
-
-Please ensure:
-- Code follows MediaWiki standards
-- Tests pass
-- Commits are descriptive
-
-See [CONTRIBUTING.md](CONTRIBUTING.md) for detailed guidelines.
 
 ## Roadmap
 
-### Phase 1: Activity Broadcasting (Current)
-- [x] Hook into page saves
-- [x] Build ActivityPub activities
-- [x] Store activities in database
-- [x] Expose REST API endpoints
-- [ ] Testing on real wiki
+### Phase 0 — Audit fixes ✅
+- Fix all blockers and compatibility issues found in the initial audit
+- Modernise deprecated MW API calls
+- Rename all config keys to `ActivityWiki*` prefix
 
-### Phase 2: HTTP Delivery
-- [ ] HTTP signature implementation
-- [ ] POST activities to follower inboxes
-- [ ] Retry logic for failed deliveries
-- [ ] Request queuing and rate limiting
+### Phase 1 — Identity ✅
+- Complete actor object endpoint
+- Implement WebFinger endpoint for Fediverse discoverability
 
-### Phase 3: Per-User Actors
-- [ ] User profile endpoints
-- [ ] Per-user activity attribution
-- [ ] User preferences for federation
+### Phase 2 — Security (planned)
+- RSA key pair generation and storage
+- HTTP Signature signing on all outbound requests
 
-### Phase 4: Inbox & Interactions
-- [ ] POST /inbox endpoint
-- [ ] Handle Follow/Unfollow requests
-- [ ] Track followers
-- [ ] (Future: Handle replies, likes, etc.)
+### Phase 3 — Publishing (planned)
+- Full event hook coverage (create, edit, delete, move)
+- Actual HTTP delivery to follower inboxes
+- Outbox endpoint completion
 
-## Security Considerations
+### Phase 4 — Receiving (planned)
+- Inbox endpoint
+- Follow / Unfollow handling
+- Followers collection completion
 
-- **HTTP Signatures**: Phase 2 will implement RFC 8017 to sign outgoing requests
-- **Content Sanitization**: Page content is sanitized before inclusion in activities
-- **Rate Limiting**: Configuration options prevent spamming followers
-- **Private Key Storage**: Private keys stored securely in LocalSettings.php
-- **Access Control**: Only public wiki content is federated
+### Phase 5 — Administration (planned)
+- Special:ActivityWiki status page
+- MediaWiki log integration
+- Maintenance scripts
+
+### Post-MVP
+- Per-user ActivityPub actors (`$wgActivityWikiEnableUserActors`)
 
 ## Troubleshooting
 
-### Activities not appearing in the Fediverse
+### Check the actor endpoint is reachable
 
-1. Verify the extension is enabled:
-   ```bash
-   curl https://your-wiki.example.com/api/rest_v1/activitypub/actor
-   ```
-   Should return actor JSON, not 404.
+```bash
+curl https://your-wiki.example.com/w/rest.php/activitywiki/actor
+```
 
-2. Check MediaWiki error logs:
-   ```bash
-   tail -f /path/to/mediawiki/logs/debug.log | grep -i activitypub
-   ```
+Should return actor JSON, not a 404.
 
-3. Verify REST API is enabled in LocalSettings.php:
-   ```php
-   $wgEnableRestAPI = true;
-   ```
+### Check debug logs
 
-### "No public key found"
+Set `$wgActivityWikiDebugLevel = 1;` in `LocalSettings.php`, then:
 
-1. Generate key pair (will be automatic in v0.2)
-2. Verify keys are in database
+```bash
+tail -f /path/to/mediawiki/logs/debug.log | grep -i ActivityWiki
+```
 
 ## License
 
-GPL-3.0-or-later
-
-This extension is licensed under the GNU General Public License v3.0 or later. See LICENSE file for details.
-
-## Support
-
-- **Issues**: Report bugs on [GitHub Issues](https://github.com/lucamauri/ActivityWiki/issues)
-- **Discussions**: Ask questions on [GitHub Discussions](https://github.com/lucamauri/ActivityWiki/discussions)
-- **Documentation**: Full docs at [mediawiki.org](https://www.mediawiki.org/wiki/Extension:ActivityWiki)
+GPL-2.0-or-later. See LICENSE file for details.
 
 ## References
 
 - [ActivityPub Specification](https://www.w3.org/TR/activitypub/)
 - [MediaWiki Extension Development](https://www.mediawiki.org/wiki/Manual:Developing_extensions)
-- [Fediverse Overview](https://en.wikipedia.org/wiki/Fediverse)
-
-## Acknowledgments
-
-Inspired by XWiki's ActivityPub implementation and the need for federation in wiki communities.
+- [Extension:ActivityWiki on MediaWiki.org](https://www.mediawiki.org/wiki/Extension:ActivityWiki)
 
 ---
 
-**Created for WikiTrek and the broader MediaWiki community.**
+*Created for WikiTrek and the broader MediaWiki community.*

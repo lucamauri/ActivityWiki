@@ -1,17 +1,26 @@
 [
   {
-    "path": "/activitypub/actor",
+    "path": "/activitywiki/actor",
     "method": "GET",
-    "class": "MediaWiki\\Extension\\ActivityWiki\\Rest\\ActorHandler"
+    "class": "MediaWiki\\Extension\\ActivityWiki\\Rest\\ActorHandler",
+    "services": ["MainConfig"]
   },
   {
-    "path": "/activitypub/outbox",
+    "path": "/activitywiki/outbox",
     "method": "GET",
-    "class": "MediaWiki\\Extension\\ActivityWiki\\Rest\\OutboxHandler"
+    "class": "MediaWiki\\Extension\\ActivityWiki\\Rest\\OutboxHandler",
+    "services": ["MainConfig"]
   },
   {
-    "path": "/activitypub/followers",
+    "path": "/activitywiki/followers",
     "method": "GET",
-    "class": "MediaWiki\\Extension\\ActivityWiki\\Rest\\FollowersHandler"
+    "class": "MediaWiki\\Extension\\ActivityWiki\\Rest\\FollowersHandler",
+    "services": ["MainConfig"]
+  },
+  {
+    "path": "/activitywiki/webfinger",
+    "method": "GET",
+    "class": "MediaWiki\\Extension\\ActivityWiki\\Rest\\WebFingerHandler",
+    "services": ["MainConfig"]
   }
 ]

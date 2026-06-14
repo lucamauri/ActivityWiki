@@ -1,0 +1,8 @@
+{
+  "@metadata": {
+    "authors": ["Luca Mauri"],
+    "license-name": "GPL-2.0-or-later"
+  },
+  "activitywiki-desc": "Integra la tua istanza MediaWiki con il Fediverso tramite il protocollo ActivityPub",
+  "activitywiki-default-create-summary": "Nuova pagina creata"
+}

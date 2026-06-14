@@ -1,18 +1,81 @@
 <?php
+/**
+ * OutboxHandler — REST handler for the ActivityPub outbox endpoint.
+ *
+ * Serves the wiki's ActivityPub outbox at:
+ *   GET /activitywiki/outbox
+ *
+ * The outbox is an OrderedCollection listing activities published by this
+ * actor (page creations, edits, deletions). In Phase 1 this returns an
+ * empty collection. Full implementation is deferred to Phase 3
+ * (Layer 3 — Publishing).
+ *
+ * @file
+ * @ingroup Extensions
+ * @license GPL-2.0-or-later
+ */
 
 namespace MediaWiki\Extension\ActivityWiki\Rest;
 
+use MediaWiki\Config\Config;
+use MediaWiki\Extension\ActivityWiki\Api\ActivityPubModule;
 use MediaWiki\Rest\SimpleHandler;
-use MediawikiActivityPub\Api\ActivityPubModule;
 
+/**
+ * Handles GET /activitywiki/outbox
+ *
+ * Returns a spec-compliant empty ActivityPub OrderedCollection.
+ * Pagination and real activity content will be added in Phase 3.
+ */
 class OutboxHandler extends SimpleHandler {
 
     /**
-     * Handle GET /activitypub/outbox
+     * The ActivityPub object builder.
      *
-     * @return array ActivityPub OrderedCollection object
+     * @var ActivityPubModule
      */
-    public function run() {
-        return ActivityPubModule::buildOutboxObject();
+    private ActivityPubModule $module;
+
+    /**
+     * @param Config $config Injected by MediaWiki from routes.json "services"
+     */
+    public function __construct( Config $config ) {
+        $this->module = new ActivityPubModule( $config );
+    }
+
+    /**
+     * Handles the GET request and returns the outbox collection.
+     *
+     * @return \MediaWiki\Rest\Response
+     */
+    public function run(): \MediaWiki\Rest\Response {
+        $json = json_encode(
+            $this->module->buildOutboxObject(),
+            JSON_PRETTY_PRINT | JSON_UNESCAPED_SLASHES
+        );
+
+        if ( $json === false ) {
+            return $this->getResponseFactory()->createHttpError( 500, [
+                'message' => 'Failed to encode outbox object as JSON.',
+            ] );
+        }
+
+        $response = $this->getResponseFactory()->create();
+        $response->setHeader( 'Content-Type', 'application/activity+json; charset=UTF-8' );
+        $response->setHeader( 'Access-Control-Allow-Origin', '*' );
+        $response->setHeader( 'Cache-Control', 'public, max-age=3600' );
+        $response->getBody()->write( $json );
+
+        return $response;
+    }
+
+    /**
+     * This endpoint takes no parameters in Phase 1.
+     * Pagination parameters (page, limit) will be added in Phase 3.
+     *
+     * @return array
+     */
+    public function getParamSettings(): array {
+        return [];
     }
 }
