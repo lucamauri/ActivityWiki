@@ -91,8 +91,7 @@
   },
 
   "DatabaseSchemas": {
-    "activitywiki_activities": "db/activitywiki_activities.json",
-    "activitywiki_keys": "db/activitywiki_keys.json"
+    "activitywiki_activities": "db/activitywiki_activities.json"
   },
 
   "HookHandlers": {

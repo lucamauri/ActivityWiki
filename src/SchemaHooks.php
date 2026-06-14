@@ -49,9 +49,9 @@ class SchemaHooks
 
 		$updater->addExtensionTable(
 			'activitywiki_keys',
-			dirname(__DIR__) . '/db/activitywiki_keys.json'
+			dirname( __DIR__ ) . '/db/activitywiki_keys.sql'
 		);
-
+		
 		$updater->addExtensionUpdate([
 			[self::class, 'generateInitialKeyPair'],
 		]);
