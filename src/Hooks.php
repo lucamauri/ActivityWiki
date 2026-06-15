@@ -13,7 +13,7 @@
 namespace MediaWiki\Extension\ActivityWiki;
 
 use MediaWiki\Config\Config;
-use MediaWiki\JobQueue\JobQueueGroup;
+use JobQueueGroup;
 use MediaWiki\Storage\Hook\PageSaveCompleteHook;
 use Wikimedia\Rdbms\IConnectionProvider;
 

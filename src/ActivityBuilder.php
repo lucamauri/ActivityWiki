@@ -13,7 +13,7 @@
 namespace MediaWiki\Extension\ActivityWiki;
 
 use MediaWiki\Config\Config;
-use MediaWiki\Page\WikiPage;
+use WikiPage;
 use MediaWiki\Revision\RevisionRecord;
 use MediaWiki\User\UserIdentity;
 

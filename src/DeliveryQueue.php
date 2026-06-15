@@ -14,7 +14,7 @@
 namespace MediaWiki\Extension\ActivityWiki;
 
 use MediaWiki\Extension\ActivityWiki\Jobs\DeliveryJob;
-use MediaWiki\JobQueue\JobQueueGroup;
+use JobQueueGroup;
 use Wikimedia\Rdbms\IConnectionProvider;
 
 class DeliveryQueue {
@@ -94,7 +94,10 @@ class DeliveryQueue {
             // Push an async job to deliver this activity to follower inboxes.
             // The job receives only the activity ID — it re-fetches the full
             // record from the database when it runs, avoiding large param payloads.
-            $job = new DeliveryJob( [ 'activityId' => $activityId ], $this->dbProvider );
+            $job = new \JobSpecification(
+                'MediawikiActivityPubDelivery',
+                [ 'activityId' => $activityId ]
+            );
             $this->jobQueueGroup->push( $job );
 
             wfDebugLog( 'ActivityWiki', 'DeliveryJob queued for activity: ' . $activityId );

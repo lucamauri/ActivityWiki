@@ -111,7 +111,16 @@
   },
 
   "JobClasses": {
-    "MediawikiActivityPubDelivery": "MediaWiki\\Extension\\ActivityWiki\\Jobs\\DeliveryJob"
+    "MediawikiActivityPubDelivery": {
+      "class": "MediaWiki\\Extension\\ActivityWiki\\Jobs\\DeliveryJob",
+      "needsPage": false,
+      "services": [
+        "DBLoadBalancerFactory",
+        "ActivityWiki.HttpSigner",
+        "HttpRequestFactory",
+        "MainConfig"
+      ]
+    }
   },
 
   "RestModuleFiles": ["src/Rest/routes.json"],
