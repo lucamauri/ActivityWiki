@@ -162,43 +162,120 @@ class ActivityPubModule {
 		);
 	}
 
-	// -------------------------------------------------------------------------
-	// Private helpers
-	// -------------------------------------------------------------------------
-
 	/**
-	 * Builds the ActivityPub Image object for the actor's icon (avatar).
-	 *
-	 * Uses $wgActivityWikiActorIcon if configured. Falls back to $wgFavicon,
-	 * normalising it to an absolute URL if it is a relative path.
-	 *
-	 * Extracted from buildActorObject() as a private method for readability
-	 * and testability (the inline IIFE pattern is unusual in MediaWiki code).
-	 *
-	 * @return array An ActivityPub Image object with "type" and "url" fields.
-	 */
-	private function buildIconObject(): array {
-		$iconUrl = $this->config->get( 'ActivityWikiActorIcon' );
+ * Builds the ActivityPub Image object for the actor's icon (avatar), or
+ * null if no usable icon could be found.
+ *
+ * Tries, in order: an explicit operator override
+ * ($wgActivityWikiActorIcon), the wiki's "icon" logo variant
+ * ($wgLogos['icon'] — a square mark without wordmark/tagline, the
+ * closest semantic equivalent to an avatar), then the legacy site
+ * favicon ($wgFavicon).
+ *
+ * CONFIRMED VIA LIVE TESTING (2026-06-21): publishing a .ico URL here
+ * (the previous unconditional $wgFavicon fallback) causes Mastodon to
+ * show a generic placeholder instead of the real image — .ico is not a
+ * format Mastodon renders as a profile avatar, regardless of what
+ * Content-Type the server serves it with. Each candidate is therefore
+ * validated by file extension before use; only .png/.jpg/.jpeg are
+ * accepted. If no candidate passes, the icon field is omitted entirely
+ * — a missing avatar (Mastodon's own default) is strictly better than
+ * one we already know will not render. See ActivityWiki-plan.md.
+ *
+ * @return array|null An ActivityPub Image object with "type", "url",
+ *   and "mediaType" fields, or null if nothing usable was found.
+ */
+private function buildIconObject(): ?array {
+	$candidates = [];
 
-		if ( $iconUrl === '' ) {
-			// No custom icon configured — fall back to the wiki's favicon.
-			// $wgFavicon may be a relative path (e.g. "/favicon.ico") or
-			// an absolute URL. Normalise to always be absolute.
-			$favicon = $this->config->get( 'Favicon' );
-			if ( strpos( $favicon, 'http' ) === 0 ) {
-				// Already an absolute URL — use as-is.
-				$iconUrl = $favicon;
-			} else {
-				// Relative path — prepend the server's scheme and host.
-				$iconUrl = $this->config->get( 'Server' ) . $favicon;
-			}
-		}
-
-		return [
-			'type' => 'Image',
-			'url'  => $iconUrl,
-		];
+	// 1. Explicit operator override — always takes priority if set.
+	$explicitIcon = $this->config->get( 'ActivityWikiActorIcon' );
+	if ( $explicitIcon !== '' ) {
+		$candidates[] = $explicitIcon;
 	}
+
+	// 2. The wiki's "icon" logo variant, if configured. $wgLogos may be
+	//    entirely unset on older installs still using the legacy
+	//    $wgLogo single-path variable, so every level here is checked
+	//    defensively rather than assumed to exist.
+	$logos = $this->config->get( 'Logos' );
+	if ( is_array( $logos ) && isset( $logos['icon'] ) && is_string( $logos['icon'] ) ) {
+		$candidates[] = $logos['icon'];
+	}
+
+	// 3. Legacy fallback: the site favicon. Frequently a .ico file (which
+	//    will be rejected by the format check below), but kept as a
+	//    candidate in case an operator has pointed $wgFavicon at a
+	//    PNG/JPEG instead.
+	$favicon = $this->config->get( 'Favicon' );
+	if ( $favicon !== '' ) {
+		$candidates[] = $favicon;
+	}
+
+	foreach ( $candidates as $candidate ) {
+		$resolved = $this->resolveIconCandidate( $candidate );
+		if ( $resolved !== null ) {
+			return $resolved;
+		}
+	}
+
+	return null;
+}
+
+/**
+ * Validates and normalises a single icon candidate URL.
+ *
+ * @param string $url A possibly-relative URL or path from config.
+ * @return array|null A complete Image object if $url is an accepted
+ *   raster format, or null if it should be skipped (wrong format).
+ */
+private function resolveIconCandidate( string $url ): ?array {
+	// Normalise to an absolute URL — $wgFavicon and $wgLogos entries are
+	// commonly relative paths (e.g. "/favicon.ico"), while
+	// $wgActivityWikiActorIcon is expected to already be absolute but is
+	// normalised the same way here for safety.
+	if ( strpos( $url, 'http://' ) !== 0 && strpos( $url, 'https://' ) !== 0 ) {
+		$url = $this->config->get( 'Server' ) . $url;
+	}
+
+	$mediaType = $this->mediaTypeForUrl( $url );
+
+	if ( $mediaType === null ) {
+		// Unsupported or unrecognised format — skip this candidate
+		// rather than publishing an avatar we know will not render.
+		return null;
+	}
+
+	return [
+		'type'      => 'Image',
+		'url'       => $url,
+		'mediaType' => $mediaType,
+	];
+}
+
+/**
+ * Maps a URL's file extension to an ActivityPub mediaType string.
+ *
+ * Only PNG and JPEG are accepted — the two raster formats reliably
+ * rendered as profile avatars across Fediverse software. .ico (the
+ * cause of the original bug) and .svg (inconsistent remote-avatar
+ * support across implementations) are deliberately excluded.
+ *
+ * @param string $url
+ * @return string|null The mediaType, or null if the extension is not
+ *   one of the accepted raster formats.
+ */
+private function mediaTypeForUrl( string $url ): ?string {
+	// Strip any query string before inspecting the extension.
+	$path = parse_url( $url, PHP_URL_PATH ) ?? $url;
+	$extension = strtolower( pathinfo( $path, PATHINFO_EXTENSION ) );
+
+	return match ( $extension ) {
+		'png' => 'image/png',
+		'jpg', 'jpeg' => 'image/jpeg',
+		default => null,
+	};
+}
 
 	// -------------------------------------------------------------------------
 	// Actor object builder
@@ -242,7 +319,7 @@ class ActivityPubModule {
 		// to ensure a key is always present after installation.
 		$publicKeyPem = $this->keyManager->getPublicKeyPem() ?? '';
 
-		return [
+		$actor = [
 			// JSON-LD context — required by the ActivityPub spec.
 			'@context' => [
 				'https://www.w3.org/ns/activitystreams',
@@ -286,8 +363,10 @@ class ActivityPubModule {
 			// @todo Phase 4: populate with real following data if needed.
 			'following' => $this->getFollowingUrl(),
 
-			// Actor icon / avatar shown on Mastodon profile cards.
-			// Falls back to $wgFavicon if no custom icon is configured.
+			// Actor icon / avatar shown on Mastodon profile cards. May be
+			// null if no candidate (ActivityWikiActorIcon, Logos['icon'],
+			// Favicon) resolved to an accepted raster format — see
+			// buildIconObject() for the full fallback chain and rationale.
 			'icon' => $this->buildIconObject(),
 
 			// Public key used to verify HTTP Signatures on our outgoing
@@ -300,6 +379,15 @@ class ActivityPubModule {
 				'publicKeyPem' => $publicKeyPem,
 			],
 		];
+
+		// Omit the icon field entirely if no usable candidate was found,
+		// rather than publish a null value (invalid per the ActivityPub
+		// spec's Image object shape).
+		if ( $actor['icon'] === null ) {
+			unset( $actor['icon'] );
+		}
+
+		return $actor;
 	}
 
 	// -------------------------------------------------------------------------

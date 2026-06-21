@@ -24,6 +24,7 @@ namespace MediaWiki\Extension\ActivityWiki\Rest;
 
 use MediaWiki\Config\Config;
 use MediaWiki\Extension\ActivityWiki\Api\ActivityPubModule;
+use MediaWiki\Extension\ActivityWiki\KeyManager;
 use MediaWiki\Rest\SimpleHandler;
 use Wikimedia\ParamValidator\ParamValidator;
 
@@ -57,11 +58,17 @@ class WebFingerHandler extends SimpleHandler {
 
     /**
      * @param Config $config Injected by MediaWiki from routes.json "services"
+     * @param KeyManager $keyManager Injected by MediaWiki from routes.json "services".
+     *   Required by ActivityPubModule's constructor — WebFingerHandler itself
+     *   never calls any key-related method on the module (it only uses the
+     *   URL/username helpers), but ActivityPubModule has no constructor
+     *   overload that omits it. This mirrors exactly how ActorHandler already
+     *   constructs the same module.
      */
-    public function __construct( Config $config ) {
+    public function __construct( Config $config, KeyManager $keyManager ) {
         $this->config = $config;
         // Reuse ActivityPubModule for all URL building — single source of truth.
-        $this->module = new ActivityPubModule( $config );
+        $this->module = new ActivityPubModule( $config, $keyManager );
     }
 
     /**

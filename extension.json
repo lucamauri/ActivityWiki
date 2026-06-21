@@ -1,6 +1,6 @@
 {
   "name": "ActivityWiki",
-  "version": "0.1.0",
+  "version": "0.2.0",
   "author": ["Luca Mauri"],
   "url": "https://github.com/lucamauri/ActivityWiki",
   "descriptionmsg": "activitywiki-desc",
@@ -74,7 +74,7 @@
     },
     "ActivityWikiDeliveryRetries": {
       "value": 3,
-      "description": "Number of retry attempts for failed HTTP deliveries to follower inboxes."
+      "description": "Number of retry attempts for failed HTTP deliveries to follower inboxes. Also used by AcceptJob for delivering Accept replies."
     },
     "ActivityWikiEnableUserActors": {
       "value": false,
@@ -116,6 +116,15 @@
       "needsPage": false,
       "services": [
         "DBLoadBalancerFactory",
+        "ActivityWiki.HttpSigner",
+        "HttpRequestFactory",
+        "MainConfig"
+      ]
+    },
+    "MediawikiActivityPubAccept": {
+      "class": "MediaWiki\\Extension\\ActivityWiki\\Jobs\\AcceptJob",
+      "needsPage": false,
+      "services": [
         "ActivityWiki.HttpSigner",
         "HttpRequestFactory",
         "MainConfig"

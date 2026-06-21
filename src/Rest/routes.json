@@ -21,6 +21,12 @@
     "path": "/activitywiki/webfinger",
     "method": "GET",
     "class": "MediaWiki\\Extension\\ActivityWiki\\Rest\\WebFingerHandler",
-    "services": ["MainConfig"]
+    "services": ["MainConfig", "ActivityWiki.KeyManager"]
+  },
+  {
+    "path": "/activitywiki/inbox",
+    "method": "POST",
+    "class": "MediaWiki\\Extension\\ActivityWiki\\Rest\\InboxHandler",
+    "services": ["ActivityWiki.SignatureVerifier", "ActivityWiki.FollowManager"]
   }
 ]

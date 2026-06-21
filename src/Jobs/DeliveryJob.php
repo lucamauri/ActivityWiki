@@ -250,25 +250,53 @@ class DeliveryJob extends \Job {
 					return true;
 				}
 
-				// ------------------------------------------------------------
+			// ------------------------------------------------------------
 				// Build and send the HTTP POST via MWHttpRequest.
 				//
 				// MWHttpRequest is MediaWiki's HTTP client wrapper. It handles
 				// timeouts, redirects, and TLS verification consistently across
 				// environments. We set Content-Type as required by ActivityPub.
+				//
+				// CONFIRMED VIA LIVE TESTING (2026-06-20, during Phase 4 work):
+				// the 'headers' key in this options array does NOT set request
+				// headers. MWHttpRequest's and GuzzleHttpRequest's constructors
+				// never read $options['headers'] at all — only a fixed allow-list
+				// of other keys is processed. This means every header in
+				// $signedHeaders (the Signature, Date, Digest, and Host headers
+				// HttpSigner builds) and the Content-Type header below were
+				// silently dropped on every outbound delivery since this job
+				// went live in Phase 3. Fixed by calling setHeader() once per
+				// header on the request object itself, below.
+				//
+				// SECOND BUG CONFIRMED VIA LIVE TESTING (2026-06-21, during
+				// Phase 4 Accept-delivery debugging): the 'body' key in this
+				// same options array is ALSO not read by MWHttpRequest's
+				// constructor — the only allow-listed keys are 'postData',
+				// 'proxy', 'noProxy', 'sslVerifyHost', 'caInfo', 'method',
+				// 'followRedirects', 'maxRedirects', 'sslVerifyCert', 'callback'
+				// (see MWHttpRequest::__construct(), $members array). 'body' is
+				// not among them. This means every outbound delivery has ALSO
+				// been sent with a completely empty POST body — compounding
+				// with the header bug above. The receiving server's computed
+				// Digest of the (empty) body it actually received would never
+				// match our claimed Digest header, causing rejection even once
+				// the headers themselves were correctly attached. Fixed by
+				// using 'postData' instead of 'body' below. See
+				// ActivityWiki-plan.md for the full writeup.
 				// ------------------------------------------------------------
 				$request = $this->httpRequestFactory->create(
 					$inboxUrl,
 					[
-						'method'  => 'POST',
-						'body'    => $activityJson,
-						'headers' => array_merge(
-							$signedHeaders,
-							[ 'Content-Type' => self::CONTENT_TYPE ]
-						),
+						'method'   => 'POST',
+						'postData' => $activityJson,
 					],
 					__METHOD__
 				);
+
+				foreach ( $signedHeaders as $headerName => $headerValue ) {
+					$request->setHeader( $headerName, $headerValue );
+				}
+				$request->setHeader( 'Content-Type', self::CONTENT_TYPE );
 
 				$status = $request->execute();
 

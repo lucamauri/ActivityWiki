@@ -20,8 +20,10 @@ declare( strict_types=1 );
  * @package MediaWiki\Extension\ActivityWiki
  */
 
+use MediaWiki\Extension\ActivityWiki\FollowManager;
 use MediaWiki\Extension\ActivityWiki\HttpSigner;
 use MediaWiki\Extension\ActivityWiki\KeyManager;
+use MediaWiki\Extension\ActivityWiki\SignatureVerifier;
 use MediaWiki\MediaWikiServices;
 
 return [
@@ -54,6 +56,57 @@ return [
 			// KeyManager provides getPrivateKeyPem() for signing.
 			$services->get( 'ActivityWiki.KeyManager' ),
 			// MainConfig provides Server and ScriptPath for building keyId.
+			$services->getMainConfig()
+		);
+	},
+
+	/**
+	 * ActivityWiki.SignatureVerifier
+	 *
+	 * Verifies inbound HTTP Signatures on requests arriving at the wiki's
+	 * inbox endpoint (Phase 4). Mirror image of ActivityWiki.HttpSigner.
+	 * Depends on:
+	 *   - HttpRequestFactory — to fetch the sender's actor document and
+	 *     obtain their public key, the same service DeliveryJob already
+	 *     uses for outbound POSTs.
+	 *   - MainConfig — to build this wiki's own actor URL, used in the
+	 *     self-identifying User-Agent header sent on that fetch (confirmed
+	 *     necessary via live testing — see ActivityWiki-plan.md, section 4.5).
+	 *
+	 * @return SignatureVerifier
+	 */
+	'ActivityWiki.SignatureVerifier' => static function ( MediaWikiServices $services ): SignatureVerifier {
+		return new SignatureVerifier(
+			// getHttpRequestFactory() is the standard MediaWiki service
+			// accessor — the same factory DeliveryJob receives via its
+			// JobClasses "services" list in extension.json.
+			$services->getHttpRequestFactory(),
+			$services->getMainConfig()
+		);
+	},
+
+	/**
+	 * ActivityWiki.FollowManager
+	 *
+	 * Owns Follow/Undo business logic for the inbox endpoint (Phase 4):
+	 * recording/removing rows in activitywiki_followers, and enqueuing the
+	 * Accept reply via AcceptJob.
+	 * Depends on:
+	 *   - DBLoadBalancerFactory — provides IConnectionProvider for DB access,
+	 *     same pass-through pattern already used by ActivityWiki.KeyManager.
+	 *   - JobQueueGroup — to enqueue the MediawikiActivityPubAccept job.
+	 *   - HttpRequestFactory — to fetch a follower's actor document and
+	 *     learn their inbox URL.
+	 *   - MainConfig — to build this wiki's own actor URL for the Accept's
+	 *     "actor" field.
+	 *
+	 * @return FollowManager
+	 */
+	'ActivityWiki.FollowManager' => static function ( MediaWikiServices $services ): FollowManager {
+		return new FollowManager(
+			$services->getDBLoadBalancerFactory(),
+			$services->getJobQueueGroup(),
+			$services->getHttpRequestFactory(),
 			$services->getMainConfig()
 		);
 	},
