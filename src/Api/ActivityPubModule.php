@@ -417,24 +417,42 @@ private function mediaTypeForUrl( string $url ): ?string {
 	}
 
 	/**
-	 * Builds an empty ActivityPub OrderedCollection for the followers list.
-	 *
-	 * The followers collection lists actors that follow this wiki.
-	 * Real content will be added in Phase 4 (Layer 4 — Receiving),
-	 * once the inbox and Follow handler are implemented.
-	 *
-	 * @return array
-	 */
-	public function buildFollowersObject(): array {
-		return [
-			'@context'     => 'https://www.w3.org/ns/activitystreams',
-			'id'           => $this->getFollowersUrl(),
-			'type'         => 'OrderedCollection',
-			// @todo Phase 4: replace with real count from activitywiki_followers table.
-			'totalItems'   => 0,
-			'orderedItems' => [],
-		];
-	}
+ * Builds an ActivityPub OrderedCollection for the followers list.
+ *
+ * Called by FollowersHandler, which is responsible for fetching the
+ * follower rows from activitywiki_followers and extracting the actor
+ * URLs before calling this method. This keeps ActivityPubModule free
+ * of database dependencies — it is a formatter, not a data-access layer.
+ *
+ * The orderedItems array contains only actor URLs (strings), as required
+ * by the ActivityPub spec for a followers collection (§5.3). Inbox URLs,
+ * timestamps, and other stored columns are not included — they are
+ * internal implementation details, not part of the public collection.
+ *
+ * Ordering: followers are listed oldest-first (the order FollowersHandler
+ * passes them in, having queried with ORDER BY af_followed_at ASC). This
+ * matches the convention used by Mastodon and most other implementations.
+ *
+ * @param string[] $actorUrls Flat array of follower actor URL strings,
+ *   e.g. ["https://mastodon.social/users/alice", "https://example.org/users/bob"].
+ *   May be empty if there are no followers yet — returns a valid empty
+ *   collection in that case.
+ * @return array ActivityPub-compliant OrderedCollection array, ready for
+ *   JSON encoding by the caller.
+ */
+public function buildFollowersObject( array $actorUrls = [] ): array {
+	return [
+		'@context'     => 'https://www.w3.org/ns/activitystreams',
+		'id'           => $this->getFollowersUrl(),
+		'type'         => 'OrderedCollection',
+		// totalItems is the count of actorUrls passed in — always accurate
+		// because FollowersHandler reads live from the DB on every request.
+		'totalItems'   => count( $actorUrls ),
+		// orderedItems lists each follower by their actor URL only.
+		// Remote servers use these URLs to look up follower profiles if needed.
+		'orderedItems' => $actorUrls,
+	];
+}
 
 	/**
 	 * Builds an empty ActivityPub OrderedCollection for the following list.

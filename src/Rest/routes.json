@@ -9,13 +9,13 @@
     "path": "/activitywiki/outbox",
     "method": "GET",
     "class": "MediaWiki\\Extension\\ActivityWiki\\Rest\\OutboxHandler",
-    "services": ["MainConfig"]
+    "services": ["MainConfig", "ActivityWiki.KeyManager"]
   },
   {
     "path": "/activitywiki/followers",
     "method": "GET",
     "class": "MediaWiki\\Extension\\ActivityWiki\\Rest\\FollowersHandler",
-    "services": ["MainConfig"]
+    "services": ["MainConfig", "ActivityWiki.KeyManager", "DBLoadBalancerFactory"]
   },
   {
     "path": "/activitywiki/webfinger",

@@ -149,10 +149,21 @@ class InboxHandler extends SimpleHandler {
 		} elseif ( $type === 'Undo' && ( $activity['object']['type'] ?? null ) === 'Follow' ) {
 			$this->followManager->handleUndo( $activity );
 		} else {
-			wfDebugLog(
-				'ActivityWiki',
-				"InboxHandler: received unsupported activity type \"{$type}\" — acknowledged, no action taken."
-			);
+			// Diagnostic only: captures who sent an unsupported activity type and
+    // what object it referenced. Added to investigate a recurring stream
+    // of unexplained "Delete" activities hitting the inbox — safe to
+    // remove once the source is identified. Does not affect behaviour:
+    // we still take no action and still return 202 below.
+    $actor = $activity['actor'] ?? 'unknown';
+    $objectId = is_array( $activity['object'] ?? null )
+        ? ( $activity['object']['id'] ?? 'unknown' )
+        : ( $activity['object'] ?? 'unknown' );
+
+    wfDebugLog(
+        'ActivityWiki',
+        "InboxHandler: received unsupported activity type \"{$type}\" from actor "
+        . "\"{$actor}\" (object: \"{$objectId}\") — acknowledged, no action taken."
+    );
 		}
 
 		// ------------------------------------------------------------------
