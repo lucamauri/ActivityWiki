@@ -104,8 +104,13 @@ class Hooks implements PageSaveCompleteHook {
             $this->debug( 'All checks passed — building activity' );
 
             // Build the appropriate activity type based on whether this is a
-            // new page (EDIT_NEW flag set) or an edit to an existing page
-            $activityBuilder = new ActivityBuilder( $this->config );
+            // new page (EDIT_NEW flag set) or an edit to an existing page.
+            // ActivityBuilder takes a WikiActorUrls instance (not Config
+            // directly) since the consolidation of getWikiUrl()/
+            // getWikiActorUrl() into a shared helper — see WikiActorUrls.php.
+            // ActivityBuilder is not itself service-wired, so the instance
+            // is built manually here from the Config this class already has.
+            $activityBuilder = new ActivityBuilder( new WikiActorUrls( $this->config ) );
             if ( $flags & EDIT_NEW ) {
                 $this->debug( 'Building Create activity...' );
                 $activity = $activityBuilder->createCreateActivity(

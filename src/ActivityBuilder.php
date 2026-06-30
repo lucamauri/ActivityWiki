@@ -12,23 +12,35 @@
 
 namespace MediaWiki\Extension\ActivityWiki;
 
-use MediaWiki\Config\Config;
 use WikiPage;
 use MediaWiki\Revision\RevisionRecord;
 use MediaWiki\User\UserIdentity;
 
 class ActivityBuilder {
 
-    private Config $config;
+    /**
+     * @var WikiActorUrls Provides this wiki's own base URL and actor URL.
+     *   Previously this class read $wgServer/$wgScriptPath directly via a
+     *   Config object and built those URLs itself in two private methods;
+     *   that logic was duplicated in three other classes (FollowManager,
+     *   SignatureVerifier, HttpSigner) and has been consolidated into
+     *   WikiActorUrls — see that class's docblock for the full history.
+     */
+    private WikiActorUrls $wikiActorUrls;
 
     /**
      * Construct the ActivityBuilder.
      *
-     * @param Config $config The main wiki configuration object, used to read
-     *   server URL, script path, and ActivityWiki-specific settings.
+     * Note: unlike FollowManager/SignatureVerifier/HttpSigner, ActivityBuilder
+     * is not registered in ServiceWiring.php — it is manually instantiated
+     * inside Hooks::onPageSaveComplete(), which builds the WikiActorUrls
+     * instance itself from the Config it already has and passes it in here.
+     *
+     * @param WikiActorUrls $wikiActorUrls Provides this wiki's own base URL
+     *   and actor URL.
      */
-    public function __construct( Config $config ) {
-        $this->config = $config;
+    public function __construct( WikiActorUrls $wikiActorUrls ) {
+        $this->wikiActorUrls = $wikiActorUrls;
     }
 
     /**
@@ -79,7 +91,7 @@ class ActivityBuilder {
             '@context'  => 'https://www.w3.org/ns/activitystreams',
             'id'        => $this->getActivityUrl( $revisionId ),
             'type'      => 'Create',
-            'actor'     => $this->getWikiActorUrl(),
+            'actor'     => $this->wikiActorUrls->getWikiActorUrl(),
             'object'    => $article,
             'published' => $published,
             'to'        => [ 'https://www.w3.org/ns/activitystreams#Public' ],
@@ -114,33 +126,6 @@ class ActivityBuilder {
     }
 
     /**
-     * Build the wiki's base URL with trailing slash.
-     *
-     * Combines $wgServer and $wgScriptPath to produce the root URL under
-     * which all ActivityWiki REST endpoints are served.
-     *
-     * @return string Base URL, e.g. "https://wikitrek.org/w/"
-     */
-    private function getWikiUrl(): string {
-        $server = $this->config->get( 'Server' );
-        $scriptPath = $this->config->get( 'ScriptPath' );
-        return rtrim( $server, '/' ) . $scriptPath . '/';
-    }
-
-    /**
-     * Get the wiki-level actor URL for ActivityPub.
-     *
-     * This is the stable identity URL of the wiki as a Fediverse actor.
-     * Published in the actor object and used as the 'actor' field in all
-     * outbound activities.
-     *
-     * @return string Actor URL, e.g. "https://wikitrek.org/w/rest.php/activitywiki/actor"
-     */
-    private function getWikiActorUrl(): string {
-        return $this->getWikiUrl() . 'rest.php/activitywiki/actor';
-    }
-
-    /**
      * Get the followers collection URL for this wiki actor.
      *
      * Included in the 'cc' field of outbound activities so that the activity
@@ -149,7 +134,7 @@ class ActivityBuilder {
      * @return string Followers URL, e.g. "https://wikitrek.org/w/rest.php/activitywiki/followers"
      */
     private function getFollowersUrl(): string {
-        return $this->getWikiUrl() . 'rest.php/activitywiki/followers';
+        return $this->wikiActorUrls->getWikiUrl() . 'rest.php/activitywiki/followers';
     }
 
     /**
@@ -162,7 +147,7 @@ class ActivityBuilder {
      * @return string User actor URL.
      */
     private function getUserActorUrl( UserIdentity $user ): string {
-        return $this->getWikiUrl() . 'rest.php/activitywiki/users/' . urlencode( $user->getName() );
+        return $this->wikiActorUrls->getWikiUrl() . 'rest.php/activitywiki/users/' . urlencode( $user->getName() );
     }
 
     /**
@@ -176,7 +161,7 @@ class ActivityBuilder {
      * @return string Activity URL, e.g. "https://wikitrek.org/w/activitywiki/activities/12345"
      */
     private function getActivityUrl( int $revisionId ): string {
-        return $this->getWikiUrl() . 'activitywiki/activities/' . $revisionId;
+        return $this->wikiActorUrls->getWikiUrl() . 'activitywiki/activities/' . $revisionId;
     }
 
     /**

@@ -32,7 +32,6 @@ namespace MediaWiki\Extension\ActivityWiki;
 
 use JobQueueGroup;
 use JobSpecification;
-use MediaWiki\Config\Config;
 use MediaWiki\Http\HttpRequestFactory;
 use Wikimedia\Rdbms\IConnectionProvider;
 
@@ -53,25 +52,33 @@ class FollowManager {
 	/** @var HttpRequestFactory Used to fetch a follower's actor document to learn their inbox URL. */
 	private HttpRequestFactory $httpRequestFactory;
 
-	/** @var Config MediaWiki main configuration, used to build this wiki's own actor URL. */
-	private Config $config;
+	/**
+	 * @var WikiActorUrls Provides this wiki's own base URL and actor URL.
+	 *   Previously this class read $wgServer/$wgScriptPath directly via a
+	 *   Config object and built those URLs itself in two private methods
+	 *   (getWikiUrl()/getWikiActorUrl()), duplicated identically in
+	 *   ActivityBuilder, SignatureVerifier, and HttpSigner. Consolidated
+	 *   into WikiActorUrls — see that class's docblock for the full history.
+	 */
+	private WikiActorUrls $wikiActorUrls;
 
 	/**
 	 * @param IConnectionProvider $dbProvider Database connection provider.
 	 * @param JobQueueGroup $jobQueueGroup Job queue group for enqueuing AcceptJob.
 	 * @param HttpRequestFactory $httpRequestFactory HTTP client factory for actor fetches.
-	 * @param Config $config MediaWiki main configuration object.
+	 * @param WikiActorUrls $wikiActorUrls Provides this wiki's own base URL
+	 *   and actor URL.
 	 */
 	public function __construct(
 		IConnectionProvider $dbProvider,
 		JobQueueGroup $jobQueueGroup,
 		HttpRequestFactory $httpRequestFactory,
-		Config $config
+		WikiActorUrls $wikiActorUrls
 	) {
 		$this->dbProvider         = $dbProvider;
 		$this->jobQueueGroup      = $jobQueueGroup;
 		$this->httpRequestFactory = $httpRequestFactory;
-		$this->config             = $config;
+		$this->wikiActorUrls      = $wikiActorUrls;
 	}
 
 	// -------------------------------------------------------------------------
@@ -189,9 +196,9 @@ class FollowManager {
 		// ------------------------------------------------------------------
 		$acceptActivity = [
 			'@context' => 'https://www.w3.org/ns/activitystreams',
-			'id'       => $this->getWikiUrl() . 'activitywiki/activities/accept-' . bin2hex( random_bytes( 8 ) ),
+			'id'       => $this->wikiActorUrls->getWikiUrl() . 'activitywiki/activities/accept-' . bin2hex( random_bytes( 8 ) ),
 			'type'     => 'Accept',
-			'actor'    => $this->getWikiActorUrl(),
+			'actor'    => $this->wikiActorUrls->getWikiActorUrl(),
 			'object'   => $activity,
 		];
 
@@ -302,7 +309,7 @@ class FollowManager {
             // document — the same bug found and fixed in
             // SignatureVerifier::fetchPublicKey() in this same session.
             // See ActivityWiki-plan.md, section 4.5.
-            'userAgent' => 'ActivityWiki/1.0 (+' . $this->getWikiActorUrl() . ')',
+            'userAgent' => 'ActivityWiki/1.0 (+' . $this->wikiActorUrls->getWikiActorUrl() . ')',
         ],
         __METHOD__
     );
@@ -323,31 +330,4 @@ class FollowManager {
 
     return is_array( $decoded ) ? $decoded : null;
 }
-
-	/**
-	 * Build the wiki's base URL with trailing slash.
-	 *
-	 * Mirrors ActivityBuilder::getWikiUrl() exactly. Not shared via a common
-	 * helper today since no such shared utility class exists yet — see the
-	 * ActorFetcher consolidation note for where this kind of small shared
-	 * helper could eventually live.
-	 *
-	 * @return string Base URL, e.g. "https://wikitrek.org/w/"
-	 */
-	private function getWikiUrl(): string {
-		$server     = $this->config->get( 'Server' );
-		$scriptPath = $this->config->get( 'ScriptPath' );
-		return rtrim( $server, '/' ) . $scriptPath . '/';
-	}
-
-	/**
-	 * Get the wiki-level actor URL for ActivityPub.
-	 *
-	 * Mirrors ActivityBuilder::getWikiActorUrl() exactly.
-	 *
-	 * @return string Actor URL, e.g. "https://wikitrek.org/w/rest.php/activitywiki/actor"
-	 */
-	private function getWikiActorUrl(): string {
-		return $this->getWikiUrl() . 'rest.php/activitywiki/actor';
-	}
 }

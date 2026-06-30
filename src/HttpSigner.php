@@ -4,7 +4,6 @@ declare( strict_types=1 );
 
 namespace MediaWiki\Extension\ActivityWiki;
 
-use MediaWiki\Config\Config;
 use RuntimeException;
 
 /**
@@ -72,18 +71,24 @@ class HttpSigner {
 	private KeyManager $keyManager;
 
 	/**
-	 * @var Config MediaWiki configuration, used to build the keyId URL from
-	 *   $wgServer and $wgScriptPath.
+	 * @var WikiActorUrls Provides this wiki's own actor URL, used to build
+	 *   the keyId sent in the Signature header. Previously this class read
+	 *   $wgServer/$wgScriptPath directly via a Config object and built that
+	 *   URL itself in two separate places (inline in signRequest() and
+	 *   again, slightly differently, in the public getActorUrl() method
+	 *   below); consolidated into WikiActorUrls, shared with
+	 *   ActivityBuilder, FollowManager, and SignatureVerifier — see that
+	 *   class's docblock for the full history.
 	 */
-	private Config $config;
+	private WikiActorUrls $wikiActorUrls;
 
 	/**
 	 * @param KeyManager $keyManager Service that holds the RSA key pair.
-	 * @param Config $config MediaWiki main configuration object.
+	 * @param WikiActorUrls $wikiActorUrls Provides this wiki's own actor URL.
 	 */
-	public function __construct( KeyManager $keyManager, Config $config ) {
-		$this->keyManager = $keyManager;
-		$this->config     = $config;
+	public function __construct( KeyManager $keyManager, WikiActorUrls $wikiActorUrls ) {
+		$this->keyManager    = $keyManager;
+		$this->wikiActorUrls = $wikiActorUrls;
 	}
 
 	/**
@@ -217,9 +222,7 @@ class HttpSigner {
 		// with "#main-key" appended. Mastodon fetches the actor document
 		// and uses publicKey.id to look up the public key for verification.
 		// ----------------------------------------------------------------
-		$server     = rtrim( $this->config->get( 'Server' ), '/' );
-		$scriptPath = rtrim( $this->config->get( 'ScriptPath' ), '/' );
-		$keyId      = $server . $scriptPath . '/rest.php/activitywiki/actor' . self::KEY_FRAGMENT;
+		$keyId = $this->wikiActorUrls->getWikiActorUrl() . self::KEY_FRAGMENT;
 
 		// ----------------------------------------------------------------
 		// Step 7 — Assemble the Signature header value.
@@ -260,11 +263,14 @@ class HttpSigner {
 	 * duplicating the config reads. Returns the actor endpoint URL without
 	 * the #main-key fragment.
 	 *
+	 * Thin passthrough to WikiActorUrls — kept as a named method on this
+	 * class since it's part of HttpSigner's existing public API, even
+	 * though nothing outside this class currently calls it (confirmed by
+	 * search across the rest of the extension).
+	 *
 	 * @return string Full URL of the actor REST endpoint.
 	 */
 	public function getActorUrl(): string {
-		$server     = rtrim( $this->config->get( 'Server' ), '/' );
-		$scriptPath = rtrim( $this->config->get( 'ScriptPath' ), '/' );
-		return $server . $scriptPath . '/rest.php/activitywiki/actor';
+		return $this->wikiActorUrls->getWikiActorUrl();
 	}
 }

@@ -4,7 +4,6 @@ declare( strict_types=1 );
 
 namespace MediaWiki\Extension\ActivityWiki;
 
-use MediaWiki\Config\Config;
 use MediaWiki\Http\HttpRequestFactory;
 
 /**
@@ -83,19 +82,24 @@ class SignatureVerifier {
 	private HttpRequestFactory $httpRequestFactory;
 
 	/**
-	 * @var Config MediaWiki main configuration, used to build this wiki's
-	 *   own actor URL for the self-identifying User-Agent header sent on
-	 *   outbound actor-document fetches.
+	 * @var WikiActorUrls Provides this wiki's own base URL and actor URL,
+	 *   used to build the self-identifying User-Agent header sent on
+	 *   outbound actor-document fetches. Previously this class read
+	 *   $wgServer/$wgScriptPath directly via a Config object and built
+	 *   those URLs itself; consolidated into WikiActorUrls, shared with
+	 *   ActivityBuilder, FollowManager, and HttpSigner — see that class's
+	 *   docblock for the full history.
 	 */
-	private Config $config;
+	private WikiActorUrls $wikiActorUrls;
 
 	/**
 	 * @param HttpRequestFactory $httpRequestFactory MediaWiki's HTTP client factory.
-	 * @param Config $config MediaWiki main configuration object.
+	 * @param WikiActorUrls $wikiActorUrls Provides this wiki's own base URL
+	 *   and actor URL.
 	 */
-	public function __construct( HttpRequestFactory $httpRequestFactory, Config $config ) {
+	public function __construct( HttpRequestFactory $httpRequestFactory, WikiActorUrls $wikiActorUrls ) {
 		$this->httpRequestFactory = $httpRequestFactory;
-		$this->config             = $config;
+		$this->wikiActorUrls      = $wikiActorUrls;
 	}
 
 	/**
@@ -446,43 +450,9 @@ private function fetchPublicKey( string $keyId ): ?string {
 	 * triggers a redirect to an HTML page instead of the JSON actor
 	 * document we actually need.
 	 *
-	 * NOTE: this duplicates the small URL-building logic already private
-	 * to ActivityBuilder (getWikiUrl()/getWikiActorUrl()), which
-	 * FollowManager also already duplicates for the same reason (no shared
-	 * "wiki self-URL" utility exists yet to call instead). This is now a
-	 * third copy of the same few lines — see the existing "known
-	 * duplication, deferred" note in ActivityWiki-plan.md section 4.2 for
-	 * the planned consolidation; this method should be updated to call
-	 * that shared helper once it exists, rather than adding a fourth copy
-	 * later.
-	 *
 	 * @return string e.g. "ActivityWiki/1.0 (+https://example.org/w/rest.php/activitywiki/actor)"
 	 */
 	private function buildUserAgent(): string {
-		return 'ActivityWiki/1.0 (+' . $this->getWikiActorUrl() . ')';
-	}
-
-	/**
-	 * Build the wiki's base URL with trailing slash.
-	 *
-	 * Mirrors ActivityBuilder::getWikiUrl() exactly.
-	 *
-	 * @return string Base URL, e.g. "https://example.org/w/"
-	 */
-	private function getWikiUrl(): string {
-		$server     = $this->config->get( 'Server' );
-		$scriptPath = $this->config->get( 'ScriptPath' );
-		return rtrim( $server, '/' ) . $scriptPath . '/';
-	}
-
-	/**
-	 * Get the wiki-level actor URL for ActivityPub.
-	 *
-	 * Mirrors ActivityBuilder::getWikiActorUrl() exactly.
-	 *
-	 * @return string Actor URL, e.g. "https://example.org/w/rest.php/activitywiki/actor"
-	 */
-	private function getWikiActorUrl(): string {
-		return $this->getWikiUrl() . 'rest.php/activitywiki/actor';
+		return 'ActivityWiki/1.0 (+' . $this->wikiActorUrls->getWikiActorUrl() . ')';
 	}
 }

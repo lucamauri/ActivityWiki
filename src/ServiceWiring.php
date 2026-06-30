@@ -24,6 +24,7 @@ use MediaWiki\Extension\ActivityWiki\FollowManager;
 use MediaWiki\Extension\ActivityWiki\HttpSigner;
 use MediaWiki\Extension\ActivityWiki\KeyManager;
 use MediaWiki\Extension\ActivityWiki\SignatureVerifier;
+use MediaWiki\Extension\ActivityWiki\WikiActorUrls;
 use MediaWiki\MediaWikiServices;
 
 return [
@@ -50,13 +51,46 @@ return [
 			$services->getDBLoadBalancerFactory()
 		);
 	},
-	
+
+	/**
+	 * ActivityWiki.WikiActorUrls
+	 *
+	 * Single source of truth for this wiki's own ActivityPub self-identifying
+	 * URLs (base URL and actor URL), built from $wgServer and $wgScriptPath.
+	 * Consolidates logic that was previously copy-pasted independently into
+	 * ActivityBuilder, FollowManager, SignatureVerifier, and HttpSigner — see
+	 * WikiActorUrls.php's class docblock for the full history.
+	 *
+	 * Depends on:
+	 *   - MainConfig — to read $wgServer and $wgScriptPath.
+	 *
+	 * @return WikiActorUrls
+	 */
+	'ActivityWiki.WikiActorUrls' => static function ( MediaWikiServices $services ): WikiActorUrls {
+		return new WikiActorUrls(
+			$services->getMainConfig()
+		);
+	},
+
+	/**
+	 * ActivityWiki.HttpSigner
+	 *
+	 * Signs outbound ActivityPub HTTP POST requests.
+	 * Depends on:
+	 *   - KeyManager — provides getPrivateKeyPem() for signing.
+	 *   - WikiActorUrls — provides this wiki's own actor URL, used as the
+	 *     base of the keyId sent in the Signature header. (Previously took
+	 *     MainConfig directly and built that URL itself — see
+	 *     ActivityWiki-plan.md's consolidation notes.)
+	 *
+	 * @return HttpSigner
+	 */
 	'ActivityWiki.HttpSigner' => static function ( MediaWikiServices $services ): HttpSigner {
 		return new HttpSigner(
 			// KeyManager provides getPrivateKeyPem() for signing.
 			$services->get( 'ActivityWiki.KeyManager' ),
-			// MainConfig provides Server and ScriptPath for building keyId.
-			$services->getMainConfig()
+			// WikiActorUrls provides the wiki's own actor URL for the keyId.
+			$services->get( 'ActivityWiki.WikiActorUrls' )
 		);
 	},
 
@@ -69,9 +103,10 @@ return [
 	 *   - HttpRequestFactory — to fetch the sender's actor document and
 	 *     obtain their public key, the same service DeliveryJob already
 	 *     uses for outbound POSTs.
-	 *   - MainConfig — to build this wiki's own actor URL, used in the
+	 *   - WikiActorUrls — to build this wiki's own actor URL, used in the
 	 *     self-identifying User-Agent header sent on that fetch (confirmed
 	 *     necessary via live testing — see ActivityWiki-plan.md, section 4.5).
+	 *     (Previously took MainConfig directly and built that URL itself.)
 	 *
 	 * @return SignatureVerifier
 	 */
@@ -81,7 +116,7 @@ return [
 			// accessor — the same factory DeliveryJob receives via its
 			// JobClasses "services" list in extension.json.
 			$services->getHttpRequestFactory(),
-			$services->getMainConfig()
+			$services->get( 'ActivityWiki.WikiActorUrls' )
 		);
 	},
 
@@ -97,8 +132,9 @@ return [
 	 *   - JobQueueGroup — to enqueue the MediawikiActivityPubAccept job.
 	 *   - HttpRequestFactory — to fetch a follower's actor document and
 	 *     learn their inbox URL.
-	 *   - MainConfig — to build this wiki's own actor URL for the Accept's
-	 *     "actor" field.
+	 *   - WikiActorUrls — to build this wiki's own actor URL for the Accept's
+	 *     "actor" field. (Previously took MainConfig directly and built that
+	 *     URL itself.)
 	 *
 	 * @return FollowManager
 	 */
@@ -107,7 +143,7 @@ return [
 			$services->getDBLoadBalancerFactory(),
 			$services->getJobQueueGroup(),
 			$services->getHttpRequestFactory(),
-			$services->getMainConfig()
+			$services->get( 'ActivityWiki.WikiActorUrls' )
 		);
 	},
 ];
