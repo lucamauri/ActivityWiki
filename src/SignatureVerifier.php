@@ -4,8 +4,6 @@ declare( strict_types=1 );
 
 namespace MediaWiki\Extension\ActivityWiki;
 
-use MediaWiki\Http\HttpRequestFactory;
-
 /**
  * SignatureVerifier — verifies inbound ActivityPub HTTP Signatures.
  *
@@ -17,7 +15,14 @@ use MediaWiki\Http\HttpRequestFactory;
  *
  * This is the mirror image of HttpSigner: where HttpSigner signs with our own
  * private key, SignatureVerifier verifies with the *sender's* public key,
- * which it fetches by following the `keyId` URL named in the Signature header.
+ * which it obtains by following the `keyId` URL named in the Signature
+ * header. The HTTP fetch and JSON decoding needed to do that is delegated to
+ * ActorFetcher (see Phase 5, Task 2) — this class is only responsible for
+ * stripping the `#fragment` off the keyId to get a plain actor URL, and for
+ * pulling `publicKey.publicKeyPem` out of whatever document ActorFetcher
+ * returns. Previously this class performed the HTTP GET itself, duplicating
+ * near-identical logic that also lived in FollowManager; see ActorFetcher.php's
+ * docblock for the full history of that consolidation.
  *
  * The verification scheme implemented here is "draft-cavage-http-signatures-12"
  * (October 2019) — the same draft HttpSigner produces, and the version Mastodon
@@ -30,7 +35,8 @@ use MediaWiki\Http\HttpRequestFactory;
  * Verification proceeds in five fail-fast steps:
  *   1. Parse the Signature header (reject anything but rsa-sha256 immediately)
  *   2. Verify the Digest header against the actual body (cheap, no network call)
- *   3. Fetch the sender's public key from their actor URL (one network call)
+ *   3. Fetch the sender's public key from their actor URL (one network call,
+ *      via ActorFetcher)
  *   4. Reconstruct the exact signing string the sender signed
  *   5. Run openssl_verify() and require an exact match (return value === 1)
  *
@@ -43,9 +49,10 @@ use MediaWiki\Http\HttpRequestFactory;
  *
  * Actor key caching (the `activitywiki_actor_cache` table mentioned in the
  * project plan) is intentionally NOT implemented here yet. Every call to
- * verify() currently performs a live HTTP fetch of the sender's actor
- * document. Caching is deferred to a fast-follow once this class is proven
- * working end-to-end on wikitrek.org — see ActivityWiki-plan.md, section 4.5.
+ * verify() currently performs a live HTTP fetch (via ActorFetcher) of the
+ * sender's actor document. Caching is deferred to a fast-follow once this
+ * class is proven working end-to-end on wikitrek.org — see
+ * ActivityWiki-plan.md, section 4.5.
  *
  * @since 1.0.0
  */
@@ -62,11 +69,6 @@ class SignatureVerifier {
 	private const ALGORITHM = 'rsa-sha256';
 
 	/**
-	 * The Accept header value used when fetching a remote actor document.
-	 */
-	private const ACTOR_MEDIA_TYPE = 'application/activity+json';
-
-	/**
 	 * The MediaWiki debug log channel used by this class.
 	 *
 	 * Must match the channel name configured in LocalSettings.php exactly —
@@ -75,31 +77,22 @@ class SignatureVerifier {
 	private const LOG_CHANNEL = 'ActivityWiki';
 
 	/**
-	 * @var HttpRequestFactory Used to fetch the sender's actor document over
-	 *   HTTP in order to obtain their public key. The same service DeliveryJob
-	 *   already uses for outbound POSTs.
+	 * @var ActorFetcher Fetches and decodes the sender's actor document,
+	 *   from which this class extracts publicKey.publicKeyPem. Previously
+	 *   this class held HttpRequestFactory and WikiActorUrls directly and
+	 *   performed the HTTP GET itself; that mechanics moved into
+	 *   ActorFetcher in Phase 5, Task 2, since FollowManager needed the
+	 *   identical fetch for a different field (inbox URL). See
+	 *   ActorFetcher.php's class docblock for the full history.
 	 */
-	private HttpRequestFactory $httpRequestFactory;
+	private ActorFetcher $actorFetcher;
 
 	/**
-	 * @var WikiActorUrls Provides this wiki's own base URL and actor URL,
-	 *   used to build the self-identifying User-Agent header sent on
-	 *   outbound actor-document fetches. Previously this class read
-	 *   $wgServer/$wgScriptPath directly via a Config object and built
-	 *   those URLs itself; consolidated into WikiActorUrls, shared with
-	 *   ActivityBuilder, FollowManager, and HttpSigner — see that class's
-	 *   docblock for the full history.
+	 * @param ActorFetcher $actorFetcher Fetches and decodes a remote actor
+	 *   document over HTTP.
 	 */
-	private WikiActorUrls $wikiActorUrls;
-
-	/**
-	 * @param HttpRequestFactory $httpRequestFactory MediaWiki's HTTP client factory.
-	 * @param WikiActorUrls $wikiActorUrls Provides this wiki's own base URL
-	 *   and actor URL.
-	 */
-	public function __construct( HttpRequestFactory $httpRequestFactory, WikiActorUrls $wikiActorUrls ) {
-		$this->httpRequestFactory = $httpRequestFactory;
-		$this->wikiActorUrls      = $wikiActorUrls;
+	public function __construct( ActorFetcher $actorFetcher ) {
+		$this->actorFetcher = $actorFetcher;
 	}
 
 	/**
@@ -178,8 +171,11 @@ class SignatureVerifier {
 		//
 		// keyId is a URL with a fragment, e.g.
 		// "https://mastodon.social/users/alice#main-key". We strip the
-		// fragment to get the actor URL, then GET that URL and pull
-		// publicKey.publicKeyPem out of the returned JSON.
+		// fragment to get the actor URL, then ask ActorFetcher to fetch and
+		// decode that actor document, then pull
+		// publicKey.publicKeyPem out of the returned JSON ourselves —
+		// ActorFetcher only fetches and decodes; it has no opinion about
+		// which field a caller wants.
 		// ------------------------------------------------------------------
 		$publicKeyPem = $this->fetchPublicKey( $keyId );
 
@@ -294,96 +290,6 @@ class SignatureVerifier {
 	}
 
 	/**
-	 * Verify that a Digest header matches the actual request body.
-	 *
-	 * @param string $digestHeaderValue The raw Digest header, e.g.
-	 *   "SHA-256=base64hash...".
-	 * @param string $body The raw request body to hash and compare.
-	 * @return bool True if the digest matches; false otherwise (including if
-	 *   the header is not in the expected "SHA-256=" format).
-	 */
-	private function verifyDigest( string $digestHeaderValue, string $body ): bool {
-		if ( !str_starts_with( $digestHeaderValue, 'SHA-256=' ) ) {
-			return false;
-		}
-
-		$claimedDigest = substr( $digestHeaderValue, strlen( 'SHA-256=' ) );
-		$actualDigest  = base64_encode( hash( 'sha256', $body, true ) );
-
-		// hash_equals() performs a constant-time comparison, which is the
-		// correct choice for comparing any value derived from attacker-
-		// controlled input against a locally computed reference, even
-		// though a digest mismatch here is not itself a secret.
-		return hash_equals( $actualDigest, $claimedDigest );
-	}
-
-	/**
-	 * Fetch the sender's public key PEM from their actor document.
-	 *
-	 * @param string $keyId The keyId URL from the Signature header, e.g.
-	 *   "https://mastodon.social/users/alice#main-key". The fragment is
-	 *   stripped to obtain the actor URL to fetch.
-	 * @return string|null The public key PEM, or null on any failure
-	 *   (network error, non-2xx response, invalid JSON, or missing
-	 *   publicKey.publicKeyPem field).
-	 */
-private function fetchPublicKey( string $keyId ): ?string {
-    // Strip everything from "#" onward to get the actor URL itself.
-    $actorUrl = strtok( $keyId, '#' );
-
-    if ( $actorUrl === false || $actorUrl === '' ) {
-        return null;
-    }
-
-    $request = $this->httpRequestFactory->create(
-        $actorUrl,
-        [
-            'method'    => 'GET',
-            // CONFIRMED VIA LIVE TESTING (2026-06-20): MediaWiki's
-            // HttpRequestFactory defaults to a generic User-Agent of
-            // "MediaWiki/<version>" with no identifying information.
-            // Mastodon treats requests with an unrecognized User-Agent
-            // as likely coming from a browser and responds with a 301
-            // redirect to the human-readable HTML profile page
-            // (e.g. "/@username") instead of serving the ActivityPub
-            // JSON actor document — even though the Accept header
-            // correctly requests application/activity+json. Setting an
-            // explicit, self-identifying User-Agent (as virtually all
-            // federated ActivityPub software does) avoids the
-            // redirect entirely. See ActivityWiki-plan.md, section 4.5.
-            'userAgent' => $this->buildUserAgent(),
-        ],
-        __METHOD__
-    );
-
-    // The 'headers' key inside the options array above is NOT read by
-    // MWHttpRequest/GuzzleHttpRequest — it is silently ignored. The only
-    // correct way to set a request header is this instance method,
-    // called after create() and before execute().
-    $request->setHeader( 'Accept', self::ACTOR_MEDIA_TYPE );
-
-    $status = $request->execute();
-
-    if ( !$status->isOK() ) {
-        return null;
-    }
-
-    $actorJson = json_decode( $request->getContent(), true );
-
-    if ( !is_array( $actorJson ) ) {
-        return null;
-    }
-
-    $publicKeyPem = $actorJson['publicKey']['publicKeyPem'] ?? null;
-
-    if ( !is_string( $publicKeyPem ) || $publicKeyPem === '' ) {
-        return null;
-    }
-
-    return $publicKeyPem;
-}
-
-	/**
 	 * Reconstruct the exact signing string the sender signed.
 	 *
 	 * @param string $method The HTTP method of the incoming request.
@@ -427,6 +333,67 @@ private function fetchPublicKey( string $keyId ): ?string {
 	}
 
 	/**
+	 * Verify that a Digest header matches the actual request body.
+	 *
+	 * @param string $digestHeaderValue The raw Digest header, e.g.
+	 *   "SHA-256=base64hash...".
+	 * @param string $body The raw request body to hash and compare.
+	 * @return bool True if the digest matches; false otherwise (including if
+	 *   the header is not in the expected "SHA-256=" format).
+	 */
+	private function verifyDigest( string $digestHeaderValue, string $body ): bool {
+		if ( !str_starts_with( $digestHeaderValue, 'SHA-256=' ) ) {
+			return false;
+		}
+
+		$claimedDigest = substr( $digestHeaderValue, strlen( 'SHA-256=' ) );
+		$actualDigest  = base64_encode( hash( 'sha256', $body, true ) );
+
+		// hash_equals() performs a constant-time comparison, which is the
+		// correct choice for comparing any value derived from attacker-
+		// controlled input against a locally computed reference, even
+		// though a digest mismatch here is not itself a secret.
+		return hash_equals( $actualDigest, $claimedDigest );
+	}
+
+	/**
+	 * Fetch the sender's public key PEM from their actor document.
+	 *
+	 * @param string $keyId The keyId URL from the Signature header, e.g.
+	 *   "https://mastodon.social/users/alice#main-key". The fragment is
+	 *   stripped to obtain the actor URL to fetch — fragment handling is
+	 *   specific to the HTTP Signature scheme, so it stays here rather than
+	 *   in ActorFetcher, which only knows about plain actor URLs.
+	 * @return string|null The public key PEM, or null on any failure
+	 *   (ActorFetcher could not fetch/decode the document, or the decoded
+	 *   document has no publicKey.publicKeyPem field).
+	 */
+	private function fetchPublicKey( string $keyId ): ?string {
+		// Strip everything from "#" onward to get the actor URL itself.
+		$actorUrl = strtok( $keyId, '#' );
+
+		if ( $actorUrl === false || $actorUrl === '' ) {
+			return null;
+		}
+
+		$actorJson = $this->actorFetcher->fetchActorDocument( $actorUrl );
+
+		if ( $actorJson === null ) {
+			// ActorFetcher already logged the specific network/decode
+			// failure reason; nothing further to add here.
+			return null;
+		}
+
+		$publicKeyPem = $actorJson['publicKey']['publicKeyPem'] ?? null;
+
+		if ( !is_string( $publicKeyPem ) || $publicKeyPem === '' ) {
+			return null;
+		}
+
+		return $publicKeyPem;
+	}
+
+	/**
 	 * Write a verification failure reason to the debug log.
 	 *
 	 * Centralised so every failure path logs consistently with the same
@@ -437,22 +404,5 @@ private function fetchPublicKey( string $keyId ): ?string {
 	 */
 	private function logFailure( string $reason ): void {
 		wfDebugLog( self::LOG_CHANNEL, "SignatureVerifier: verification failed — {$reason}" );
-	}
-
-	/**
-	 * Build the User-Agent header value sent on outbound actor-document
-	 * fetches.
-	 *
-	 * Identifies this wiki's actor URL so that remote servers (Mastodon,
-	 * in particular — confirmed via live testing, see ACTOR_MEDIA_TYPE's
-	 * usage in fetchPublicKey() above) treat the request as coming from
-	 * federated software rather than an anonymous browser, which otherwise
-	 * triggers a redirect to an HTML page instead of the JSON actor
-	 * document we actually need.
-	 *
-	 * @return string e.g. "ActivityWiki/1.0 (+https://example.org/w/rest.php/activitywiki/actor)"
-	 */
-	private function buildUserAgent(): string {
-		return 'ActivityWiki/1.0 (+' . $this->wikiActorUrls->getWikiActorUrl() . ')';
 	}
 }

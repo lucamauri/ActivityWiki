@@ -20,6 +20,7 @@ declare( strict_types=1 );
  * @package MediaWiki\Extension\ActivityWiki
  */
 
+use MediaWiki\Extension\ActivityWiki\ActorFetcher;
 use MediaWiki\Extension\ActivityWiki\FollowManager;
 use MediaWiki\Extension\ActivityWiki\HttpSigner;
 use MediaWiki\Extension\ActivityWiki\KeyManager;
@@ -73,6 +74,33 @@ return [
 	},
 
 	/**
+	 * ActivityWiki.ActorFetcher
+	 *
+	 * Fetches and decodes a remote ActivityPub actor document over HTTP.
+	 * Consolidates logic that was previously duplicated independently in
+	 * SignatureVerifier::fetchPublicKey() and
+	 * FollowManager::fetchActorDocument() — see ActorFetcher.php's class
+	 * docblock for the full history (Phase 5, Task 2).
+	 *
+	 * Depends on:
+	 *   - HttpRequestFactory — to perform the outbound GET request.
+	 *   - WikiActorUrls — to build this wiki's own actor URL, used in the
+	 *     self-identifying User-Agent header sent on that fetch (confirmed
+	 *     necessary via live testing — see ActivityWiki-plan.md, section 4.5).
+	 *
+	 * @return ActorFetcher
+	 */
+	'ActivityWiki.ActorFetcher' => static function ( MediaWikiServices $services ): ActorFetcher {
+		return new ActorFetcher(
+			// getHttpRequestFactory() is the standard MediaWiki service
+			// accessor — the same factory DeliveryJob receives via its
+			// JobClasses "services" list in extension.json.
+			$services->getHttpRequestFactory(),
+			$services->get( 'ActivityWiki.WikiActorUrls' )
+		);
+	},
+
+	/**
 	 * ActivityWiki.HttpSigner
 	 *
 	 * Signs outbound ActivityPub HTTP POST requests.
@@ -100,23 +128,18 @@ return [
 	 * Verifies inbound HTTP Signatures on requests arriving at the wiki's
 	 * inbox endpoint (Phase 4). Mirror image of ActivityWiki.HttpSigner.
 	 * Depends on:
-	 *   - HttpRequestFactory — to fetch the sender's actor document and
-	 *     obtain their public key, the same service DeliveryJob already
-	 *     uses for outbound POSTs.
-	 *   - WikiActorUrls — to build this wiki's own actor URL, used in the
-	 *     self-identifying User-Agent header sent on that fetch (confirmed
-	 *     necessary via live testing — see ActivityWiki-plan.md, section 4.5).
-	 *     (Previously took MainConfig directly and built that URL itself.)
+	 *   - ActorFetcher — to fetch the sender's actor document and obtain
+	 *     their public key. (Previously took HttpRequestFactory and
+	 *     WikiActorUrls directly and performed the fetch itself — that
+	 *     mechanics moved into ActorFetcher in Phase 5, Task 2. This class
+	 *     now only needs the fetched document, not the means of fetching
+	 *     it.)
 	 *
 	 * @return SignatureVerifier
 	 */
 	'ActivityWiki.SignatureVerifier' => static function ( MediaWikiServices $services ): SignatureVerifier {
 		return new SignatureVerifier(
-			// getHttpRequestFactory() is the standard MediaWiki service
-			// accessor — the same factory DeliveryJob receives via its
-			// JobClasses "services" list in extension.json.
-			$services->getHttpRequestFactory(),
-			$services->get( 'ActivityWiki.WikiActorUrls' )
+			$services->get( 'ActivityWiki.ActorFetcher' )
 		);
 	},
 
@@ -130,11 +153,14 @@ return [
 	 *   - DBLoadBalancerFactory — provides IConnectionProvider for DB access,
 	 *     same pass-through pattern already used by ActivityWiki.KeyManager.
 	 *   - JobQueueGroup — to enqueue the MediawikiActivityPubAccept job.
-	 *   - HttpRequestFactory — to fetch a follower's actor document and
-	 *     learn their inbox URL.
-	 *   - WikiActorUrls — to build this wiki's own actor URL for the Accept's
-	 *     "actor" field. (Previously took MainConfig directly and built that
-	 *     URL itself.)
+	 *   - ActorFetcher — to fetch a follower's actor document and learn
+	 *     their inbox URL. (Previously took HttpRequestFactory directly and
+	 *     performed the fetch itself — that mechanics moved into
+	 *     ActorFetcher in Phase 5, Task 2.)
+	 *   - WikiActorUrls — to build this wiki's own actor URL for the
+	 *     Accept activity's "id" and "actor" fields. Still needed directly
+	 *     here — this use is unrelated to fetching a remote actor
+	 *     document, so it did not move into ActorFetcher.
 	 *
 	 * @return FollowManager
 	 */
@@ -142,7 +168,7 @@ return [
 		return new FollowManager(
 			$services->getDBLoadBalancerFactory(),
 			$services->getJobQueueGroup(),
-			$services->getHttpRequestFactory(),
+			$services->get( 'ActivityWiki.ActorFetcher' ),
 			$services->get( 'ActivityWiki.WikiActorUrls' )
 		);
 	},

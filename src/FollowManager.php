@@ -18,11 +18,12 @@ declare( strict_types=1 );
  *     Undo{Follow} has no corresponding response activity in the spec.
  *
  * Fetching the follower's inbox URL requires an outbound GET to their actor
- * document — a similar fetch to the one SignatureVerifier performs to obtain
- * a public key, but for a different field (`inbox`). This is intentionally
- * NOT shared with SignatureVerifier in this pass; see the "known duplication,
- * deferred" note in ActivityWiki-plan.md section 4.5 for the planned
- * ActorFetcher consolidation.
+ * document — the same kind of fetch SignatureVerifier performs to obtain a
+ * public key, but for a different field (`inbox`). That shared HTTP/JSON
+ * mechanics now lives in ActorFetcher (Phase 5, Task 2); this class only
+ * extracts the fields it specifically needs (`inbox`, `endpoints.sharedInbox`)
+ * from whatever document ActorFetcher returns. See ActorFetcher.php's class
+ * docblock for the full history of that consolidation.
  *
  * @file
  * @ingroup Extensions
@@ -32,16 +33,9 @@ namespace MediaWiki\Extension\ActivityWiki;
 
 use JobQueueGroup;
 use JobSpecification;
-use MediaWiki\Http\HttpRequestFactory;
 use Wikimedia\Rdbms\IConnectionProvider;
 
 class FollowManager {
-
-	/**
-	 * The ActivityPub media type used both when fetching a remote actor
-	 * document and when it is expected back.
-	 */
-	private const ACTIVITY_MEDIA_TYPE = 'application/activity+json';
 
 	/** @var IConnectionProvider Provides replica and primary DB connections. */
 	private IConnectionProvider $dbProvider;
@@ -49,36 +43,49 @@ class FollowManager {
 	/** @var JobQueueGroup Used to enqueue AcceptJob after recording a follower. */
 	private JobQueueGroup $jobQueueGroup;
 
-	/** @var HttpRequestFactory Used to fetch a follower's actor document to learn their inbox URL. */
-	private HttpRequestFactory $httpRequestFactory;
+	/**
+	 * @var ActorFetcher Fetches and decodes a follower's actor document, from
+	 *   which this class extracts `inbox` and `endpoints.sharedInbox`.
+	 *   Previously this class held HttpRequestFactory directly and performed
+	 *   the HTTP GET itself in a private fetchActorDocument() method; that
+	 *   mechanics moved into ActorFetcher in Phase 5, Task 2, since
+	 *   SignatureVerifier needed the identical fetch for a different field
+	 *   (publicKey.publicKeyPem). See ActorFetcher.php's class docblock for
+	 *   the full history.
+	 */
+	private ActorFetcher $actorFetcher;
 
 	/**
 	 * @var WikiActorUrls Provides this wiki's own base URL and actor URL.
-	 *   Previously this class read $wgServer/$wgScriptPath directly via a
-	 *   Config object and built those URLs itself in two private methods
-	 *   (getWikiUrl()/getWikiActorUrl()), duplicated identically in
-	 *   ActivityBuilder, SignatureVerifier, and HttpSigner. Consolidated
-	 *   into WikiActorUrls — see that class's docblock for the full history.
+	 *   Used to build the Accept activity's "id" and "actor" fields — this
+	 *   use is unrelated to fetching a remote actor document, so it stayed
+	 *   here rather than moving into ActorFetcher. Previously this class
+	 *   read $wgServer/$wgScriptPath directly via a Config object and built
+	 *   those URLs itself in two private methods (getWikiUrl()/
+	 *   getWikiActorUrl()), duplicated identically in ActivityBuilder,
+	 *   SignatureVerifier, and HttpSigner. Consolidated into WikiActorUrls
+	 *   — see that class's docblock for the full history.
 	 */
 	private WikiActorUrls $wikiActorUrls;
 
 	/**
 	 * @param IConnectionProvider $dbProvider Database connection provider.
 	 * @param JobQueueGroup $jobQueueGroup Job queue group for enqueuing AcceptJob.
-	 * @param HttpRequestFactory $httpRequestFactory HTTP client factory for actor fetches.
+	 * @param ActorFetcher $actorFetcher Fetches and decodes a remote actor
+	 *   document over HTTP.
 	 * @param WikiActorUrls $wikiActorUrls Provides this wiki's own base URL
 	 *   and actor URL.
 	 */
 	public function __construct(
 		IConnectionProvider $dbProvider,
 		JobQueueGroup $jobQueueGroup,
-		HttpRequestFactory $httpRequestFactory,
+		ActorFetcher $actorFetcher,
 		WikiActorUrls $wikiActorUrls
 	) {
-		$this->dbProvider         = $dbProvider;
-		$this->jobQueueGroup      = $jobQueueGroup;
-		$this->httpRequestFactory = $httpRequestFactory;
-		$this->wikiActorUrls      = $wikiActorUrls;
+		$this->dbProvider    = $dbProvider;
+		$this->jobQueueGroup = $jobQueueGroup;
+		$this->actorFetcher  = $actorFetcher;
+		$this->wikiActorUrls = $wikiActorUrls;
 	}
 
 	// -------------------------------------------------------------------------
@@ -113,9 +120,11 @@ class FollowManager {
 		// The incoming Follow only tells us *who* is following (the actor
 		// URL) — it does not include their inbox URL, which we need in
 		// order to ever deliver anything to them (including this Accept,
-		// and every future outbound activity via DeliveryJob).
+		// and every future outbound activity via DeliveryJob). The fetch
+		// itself is delegated to ActorFetcher; we only extract the fields
+		// this class specifically needs from the result.
 		// ------------------------------------------------------------------
-		$followerActor = $this->fetchActorDocument( $actorUrl );
+		$followerActor = $this->actorFetcher->fetchActorDocument( $actorUrl );
 
 		if ( $followerActor === null ) {
 			wfDebugLog(
@@ -284,50 +293,4 @@ class FollowManager {
 			);
 		}
 	}
-
-	// -------------------------------------------------------------------------
-	// Private helpers
-	// -------------------------------------------------------------------------
-
-	/**
-	 * Fetch and decode a remote actor document.
-	 *
-	 * @param string $actorUrl The actor URL to fetch.
-	 * @return array|null The decoded actor JSON as an associative array, or
-	 *   null on any failure (network error, non-2xx response, invalid JSON).
-	 */
-	private function fetchActorDocument( string $actorUrl ): ?array {
-    $request = $this->httpRequestFactory->create(
-        $actorUrl,
-        [
-            'method'    => 'GET',
-            // CONFIRMED VIA LIVE TESTING (2026-06-20): without an
-            // explicit, self-identifying User-Agent, MediaWiki's HTTP
-            // client sends a generic "MediaWiki/<version>" string,
-            // which causes Mastodon to redirect this request to an
-            // HTML profile page instead of serving the JSON actor
-            // document — the same bug found and fixed in
-            // SignatureVerifier::fetchPublicKey() in this same session.
-            // See ActivityWiki-plan.md, section 4.5.
-            'userAgent' => 'ActivityWiki/1.0 (+' . $this->wikiActorUrls->getWikiActorUrl() . ')',
-        ],
-        __METHOD__
-    );
-
-    // The 'headers' key inside the options array above is NOT read by
-    // MWHttpRequest/GuzzleHttpRequest — it is silently ignored. The only
-    // correct way to set a request header is this instance method,
-    // called after create() and before execute().
-    $request->setHeader( 'Accept', self::ACTIVITY_MEDIA_TYPE );
-
-    $status = $request->execute();
-
-    if ( !$status->isOK() ) {
-        return null;
-    }
-
-    $decoded = json_decode( $request->getContent(), true );
-
-    return is_array( $decoded ) ? $decoded : null;
-}
 }
