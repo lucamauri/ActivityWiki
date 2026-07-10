@@ -391,28 +391,44 @@ private function mediaTypeForUrl( string $url ): ?string {
 	}
 
 	// -------------------------------------------------------------------------
-	// Outbox, followers, and following stubs
-	// These return spec-compliant empty collections.
-	// They will be fully implemented in Layer 3 and Layer 4 respectively.
+	// Outbox and followers/following
 	// -------------------------------------------------------------------------
 
 	/**
-	 * Builds an empty ActivityPub OrderedCollection for the outbox.
+	 * Builds an ActivityPub OrderedCollection for the outbox.
 	 *
 	 * The outbox lists activities this actor has published (page creations,
-	 * edits, deletions). Pagination and real content will be added in
-	 * Phase 3 (Layer 3 — Publishing).
+	 * edits, deletions). Callers (OutboxHandler) are responsible for fetching
+	 * the activity rows from activitywiki_activities and decoding each row's
+	 * activity_json before calling this method — this keeps ActivityPubModule
+	 * free of database dependencies, the same design already established by
+	 * buildFollowersObject() below.
 	 *
+	 * NOTE — pagination: this returns the full set of $activities passed in in
+	 * a single response, with no OrderedCollectionPage cursor pagination
+	 * (first/next/prev links). OutboxHandler currently caps the number of
+	 * activities it fetches (via $wgActivityWikiOutboxLimit) rather than
+	 * paginating across multiple requests. This is a deliberate, tracked
+	 * simplification — see ActivityWiki-plan.md for the fast-follow note —
+	 * not an oversight; full spec-compliant paging is planned as a follow-up
+	 * once this simpler version has been proven live.
+	 *
+	 * @param array[] $activities The decoded activity_json for each row,
+	 *   already ordered newest-first by the caller (OutboxHandler sorts by
+	 *   created_at DESC). Each element is a full ActivityPub activity object,
+	 *   in exactly the same shape originally delivered to followers.
+	 * @param int $totalItems The true total row count in activitywiki_activities
+	 *   (from a separate COUNT(*) the caller ran), which may be larger than
+	 *   count( $activities ) when the caller's fetch was limited.
 	 * @return array
 	 */
-	public function buildOutboxObject(): array {
+	public function buildOutboxObject( array $activities, int $totalItems ): array {
 		return [
 			'@context'     => 'https://www.w3.org/ns/activitystreams',
 			'id'           => $this->getOutboxUrl(),
 			'type'         => 'OrderedCollection',
-			// @todo Phase 3: replace with real count from activitywiki_activities table.
-			'totalItems'   => 0,
-			'orderedItems' => [],
+			'totalItems'   => $totalItems,
+			'orderedItems' => $activities,
 		];
 	}
 

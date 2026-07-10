@@ -1,6 +1,6 @@
 {
   "name": "ActivityWiki",
-  "version": "1.0.2",
+  "version": "1.0.3",
   "author": ["Luca Mauri"],
   "url": "https://github.com/lucamauri/ActivityWiki",
   "descriptionmsg": "activitywiki-desc",
@@ -71,6 +71,10 @@
     "ActivityWikiExcerptLength": {
       "value": 500,
       "description": "Maximum plain-text excerpt length in characters included in activity content."
+    },
+    "ActivityWikiOutboxLimit": {
+      "value": 20,
+      "description": "Maximum number of recent activities included in a single /activitywiki/outbox response. The outbox's totalItems always reflects the true total row count regardless of this limit; full cursor pagination is not yet implemented."
     },
     "ActivityWikiDeliveryRetries": {
       "value": 3,

@@ -9,7 +9,7 @@
     "path": "/activitywiki/outbox",
     "method": "GET",
     "class": "MediaWiki\\Extension\\ActivityWiki\\Rest\\OutboxHandler",
-    "services": ["MainConfig", "ActivityWiki.KeyManager"]
+    "services": ["MainConfig", "ActivityWiki.KeyManager", "DBLoadBalancerFactory"]
   },
   {
     "path": "/activitywiki/followers",
