@@ -171,13 +171,46 @@ class ActivityBuilder {
      * as required by the ActivityPub spec (e.g. "2026-04-25T10:30:00+00:00").
      * Falls back to the current time if the timestamp is malformed or empty.
      *
-     * @param string $timestamp MediaWiki timestamp in YmdHis format (e.g. "20260425103000").
-     * @return string ISO 8601 formatted timestamp (e.g. "2026-04-25T10:30:00+00:00").
+     * BUG FOUND AND FIXED (2026-07-10): $timestamp, as returned by
+     * RevisionRecord::getTimestamp(), is a MediaWiki internal timestamp and
+     * is ALWAYS in UTC — this is true regardless of $wgLocaltimezone, which
+     * only affects user-facing *display* conversions elsewhere in MediaWiki,
+     * never the raw stored/passed-around value. The previous version of
+     * this method called `DateTime::createFromFormat( 'YmdHis', $timestamp )`
+     * with no timezone argument. Per PHP's own documented behaviour, omitting
+     * the timezone argument does NOT default to UTC — it defaults to the
+     * *runtime's* default timezone (set via date_default_timezone_set(),
+     * which MediaWiki calls with $wgLocaltimezone, "Europe/Berlin"/CEST on
+     * wikitrek.org, during bootstrap). The result: the UTC-valued digits in
+     * $timestamp were parsed and then mislabeled as if they were already
+     * CEST, and ->format( DateTime::ATOM ) appended a "+02:00" suffix onto
+     * unshifted UTC digits — producing an ISO 8601 string whose offset label
+     * was wrong by exactly the DST/timezone difference, while the wall-clock
+     * digits themselves were never actually converted. Confirmed live: a
+     * page edit whose activity_json read "published": "...T16:46:19+02:00"
+     * corresponded to a database row's created_at (a genuine MySQL SYSTEM-
+     * timezone/CEST value) of "18:46:22" — a live, ongoing 2-hour
+     * discrepancy, not historical drift.
+     *
+     * Fixed by explicitly parsing with a UTC DateTimeZone (matching what the
+     * input genuinely is) and leaving the output in UTC, rather than
+     * converting to local time for display. This matches Mastodon's and
+     * most other ActivityPub implementations' convention of using UTC
+     * timestamps in federated JSON, and avoids reintroducing the same
+     * local/UTC confusion via a conversion step. The fallback branch (used
+     * only when $timestamp is malformed or empty) is fixed the same way,
+     * for consistency — both branches now always return a correctly UTC-
+     * labeled ISO 8601 string.
+     *
+     * @param string $timestamp MediaWiki timestamp in YmdHis format (e.g. "20260425103000"),
+     *   always UTC — see RevisionRecord::getTimestamp().
+     * @return string ISO 8601 formatted timestamp in UTC (e.g. "2026-04-25T10:30:00+00:00").
      */
     private function formatTimestamp( string $timestamp ): string {
-        $dateTime = \DateTime::createFromFormat( 'YmdHis', $timestamp );
+        $utc = new \DateTimeZone( 'UTC' );
+        $dateTime = \DateTime::createFromFormat( 'YmdHis', $timestamp, $utc );
         if ( $dateTime === false ) {
-            $dateTime = new \DateTime();
+            $dateTime = new \DateTime( 'now', $utc );
         }
         return $dateTime->format( \DateTime::ATOM );
     }
