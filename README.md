@@ -6,7 +6,7 @@ Integrate your MediaWiki instance with the Fediverse via ActivityPub.
 
 ActivityWiki is a MediaWiki extension that enables wiki instances to participate in the Fediverse by implementing the [ActivityPub](https://www.w3.org/TR/activitypub/) W3C protocol. It allows Mastodon users and other Fediverse participants to follow your wiki and receive notifications when pages are created, edited, or deleted — directly in their Fediverse timeline.
 
-> ℹ️ **Current status: Phase 4 (Receiving) in progress.** Identity (actor + WebFinger), Security (HTTP Signatures), and Publishing (outbound delivery to followers) are complete and working. The inbox endpoint (handling incoming `Follow`/`Undo` requests) has been built and is being tested. See the Roadmap section below for full details.
+> ℹ️ **Current status: v1.1.0 — first fully working release.** Identity (actor + WebFinger), Security (HTTP Signatures, including a documented key rotation path), Publishing (outbound delivery to followers, with a real database-backed outbox), and Receiving (inbox, `Follow`/`Undo` handling, a real database-backed followers collection) are all complete and verified live against real Fediverse traffic (Mastodon). All five ActivityPub-spec-required endpoints — actor, WebFinger, outbox, followers, inbox — are implemented and working end-to-end. See the Roadmap section below for what's deferred as a post-release fast-follow.
 
 ## Requirements
 
@@ -17,12 +17,49 @@ ActivityWiki is a MediaWiki extension that enables wiki instances to participate
 
 ## Installation
 
-### 1. Clone the extension
+Choose whichever of the two methods below fits how you manage your
+MediaWiki installation. Both end up in the same place — an `ActivityWiki`
+directory inside your `extensions/` folder — so the remaining steps (2–4)
+are identical either way.
+
+### Option A — Clone from GitHub
 
 ```bash
 cd /path/to/your/mediawiki/extensions
 git clone https://github.com/lucamauri/ActivityWiki.git ActivityWiki
 ```
+
+### Option B — Install from Packagist via Composer
+
+ActivityWiki is published on Packagist as
+[`lucamauri/activitywiki`](https://packagist.org/packages/lucamauri/activitywiki).
+This method only works if your MediaWiki installation is itself
+Composer-managed (i.e. you ran `composer install` at some point to set up
+core, rather than installing purely from a tarball/git clone with no
+`composer.json` at the wiki root — most modern installations qualify).
+
+From your MediaWiki installation root (the directory containing the main
+`composer.json`, **not** the `extensions/` directory):
+
+```bash
+composer require lucamauri/activitywiki
+```
+
+This package declares `"type": "mediawiki-extension"` in its own
+`composer.json`, which the `composer/installers` plugin (bundled with
+MediaWiki core's own `composer.json` by default) recognises and uses to
+place the extension's files directly into `extensions/ActivityWiki/`
+automatically — no manual cloning or moving required.
+
+> If `composer require` fails with something like "could not find a
+> matching version" or complains about missing `composer/installers`,
+> your MediaWiki installation likely isn't Composer-managed at the root
+> level. In that case, use Option A instead — there is no functional
+> difference between the two once the files are in place.
+
+To upgrade later, either method works the same way going forward: `git
+pull` for Option A, or `composer update lucamauri/activitywiki` for
+Option B.
 
 ### 2. Add to LocalSettings.php
 
@@ -86,6 +123,11 @@ $wgActivityWikiExcerptLength = 500;
 // Number of retry attempts for failed HTTP deliveries (outbound activities
 // and Accept replies alike)
 $wgActivityWikiDeliveryRetries = 3;
+
+// Maximum number of activities returned by the outbox endpoint
+// (most recent first). Does not affect the reported "totalItems" count,
+// which always reflects the true total number of activities.
+$wgActivityWikiOutboxLimit = 20;
 
 // Enable per-user ActivityPub actors. Post-MVP feature — do not enable
 // in production; not yet implemented.
@@ -269,6 +311,46 @@ expected and fine.
 | Works when curled directly against the server but not from the public internet | A reverse proxy is intercepting or challenging the request | Check your proxy's passthrough rules for `/.well-known/` |
 | `404` with a small JSON body (not HTML) | This is MediaWiki's own "resource not found" response | Check that the `resource` parameter's username and domain match your actual `$wgActivityWikiActorUsername` and `$wgServer` |
 
+## Key rotation
+
+ActivityWiki's HTTP Signature key pair (used to sign every outbound
+activity, and served publicly as part of the actor object) is generated
+automatically on first install — you don't need to do anything for normal
+operation. A dedicated maintenance script, `maintenance/GenerateKeys.php`,
+exists for two situations:
+
+- **First-time setup didn't generate a key for some reason** (e.g. it was
+  skipped, or OpenSSL failed at that point and you've since fixed the
+  underlying cause). Running the script with no key present is safe and
+  non-destructive.
+- **Deliberate rotation** — e.g. you suspect the private key has been
+  compromised, or you've increased `$wgActivityWikiKeySize` and want to
+  regenerate. This is destructive: the existing key pair is replaced, and
+  is gated behind an explicit `--force` flag so it can never happen by
+  accident.
+
+```bash
+# First-time generation, or check current state (safe, no key yet):
+php maintenance/run.php extensions/ActivityWiki/maintenance/GenerateKeys.php
+
+# Deliberate rotation of an existing key:
+php maintenance/run.php extensions/ActivityWiki/maintenance/GenerateKeys.php --force
+
+# Rotation, printing the new public key PEM afterward for verification:
+php maintenance/run.php extensions/ActivityWiki/maintenance/GenerateKeys.php --force --show
+```
+
+> ⚠️ **Rotation is immediate and has real consequences.** The moment the
+> new key is stored, every outbound HTTP Signature is signed with it. Any
+> Fediverse server that has cached your *old* public key (some do cache
+> aggressively) may continue rejecting your signed requests until that
+> cache expires on their end — there is no way to force this from your
+> side. This is expected and self-resolves; it is not a bug in the
+> rotation itself.
+
+Restart PHP-FPM after running the script, as a precaution (the script will
+remind you).
+
 ## Repository Structure
 
 ```
@@ -283,6 +365,10 @@ ActivityWiki/
 │   ├── ServiceWiring.php        # Registers all ActivityWiki services
 │   ├── Hooks.php                 # Page save/edit/delete event hooks
 │   ├── ActivityBuilder.php       # Builds outbound ActivityPub activity arrays
+│   ├── WikiActorUrls.php         # Shared wiki base-URL / actor-URL building logic
+│   │                              #   (consolidated from four classes)
+│   ├── ActorFetcher.php          # Shared remote actor document fetching
+│   │                              #   (consolidated from SignatureVerifier/FollowManager)
 │   ├── DeliveryQueue.php         # Persists outbound activities, enqueues delivery jobs
 │   ├── KeyManager.php            # RSA key pair generation and storage
 │   ├── HttpSigner.php            # Signs outbound HTTP requests
@@ -296,12 +382,13 @@ ActivityWiki/
 │   └── Rest/
 │       ├── ActorHandler.php      # GET  /activitywiki/actor
 │       ├── WebFingerHandler.php  # GET  /activitywiki/webfinger
-│       ├── OutboxHandler.php     # GET  /activitywiki/outbox
-│       ├── FollowersHandler.php  # GET  /activitywiki/followers
+│       ├── OutboxHandler.php     # GET  /activitywiki/outbox (real data, see $wgActivityWikiOutboxLimit)
+│       ├── FollowersHandler.php  # GET  /activitywiki/followers (real data)
 │       ├── InboxHandler.php      # POST /activitywiki/inbox
 │       └── routes.json           # REST route definitions
 ├── db/                            # Database schema files
-└── maintenance/                   # Maintenance scripts (Phase 5)
+└── maintenance/
+    └── GenerateKeys.php           # Manual key (re)generation — see Key rotation
 ```
 
 ## Roadmap
@@ -324,15 +411,26 @@ ActivityWiki/
 - Async HTTP delivery to follower inboxes, with per-follower retry
 - Outbox endpoint completion
 
-### Phase 4 — Receiving ⏳ In progress
+### Phase 4 — Receiving ✅ Complete
 - Inbox endpoint
 - `Follow` / `Undo{Follow}` handling
-- Followers collection completion (still serving a stub)
+- Followers collection serving real, database-backed data
 
-### Phase 5 — Administration (planned)
-- `Special:ActivityWiki` status page
-- MediaWiki log integration
-- Maintenance scripts
+### Phase 5 — Administration & consolidation ✅ Mostly complete
+- Shared URL-building logic consolidated into `WikiActorUrls`
+- Shared remote actor fetching consolidated into `ActorFetcher`
+- Real database-backed outbox (`$wgActivityWikiOutboxLimit`)
+- `maintenance/GenerateKeys.php` — manual key generation and `--force`-gated
+  rotation (see [Key rotation](#key-rotation))
+- Still planned: `Special:ActivityWiki` status page and MediaWiki log
+  integration (see Post-release fast-follows below)
+
+### Post-release fast-follows (not blockers)
+- Actor caching (`activitywiki_actor_cache`)
+- Full outbox pagination (`OrderedCollectionPage` with `first`/`next`/`prev` links) —
+  the outbox currently returns the most recent activities up to
+  `$wgActivityWikiOutboxLimit`, with an accurate `totalItems`, but no cursor pagination
+- `Special:ActivityWiki` status page and related MediaWiki log integration
 
 ### Post-MVP (deferred, not scoped)
 - Per-user ActivityPub actors (`$wgActivityWikiEnableUserActors`)
