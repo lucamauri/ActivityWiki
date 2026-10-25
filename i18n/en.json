@@ -1,8 +1,43 @@
 {
   "@metadata": {
-    "authors": ["Luca Mauri"],
+    "authors": [
+      "Luca Mauri"
+    ],
     "license-name": "GPL-2.0-or-later"
   },
   "activitywiki-desc": "Integrate your MediaWiki instance with the Fediverse via ActivityPub protocol",
-  "activitywiki-default-create-summary": "New page created"
+  "activitywiki-default-create-summary": "New page created",
+  "activitywiki": "ActivityWiki status",
+  "activitywiki-section-federation": "Federation",
+  "activitywiki-federation-enabled": "Enabled",
+  "activitywiki-federation-disabled": "Disabled ($wgActivityWikiEnabled is false)",
+  "activitywiki-section-webfinger": "WebFinger discovery",
+  "activitywiki-webfinger-state-ok": "Reachable and correctly configured",
+  "activitywiki-webfinger-state-misconfigured": "Reachable, but misconfigured",
+  "activitywiki-webfinger-state-unreachable": "Unreachable",
+  "activitywiki-webfinger-probed-url": "Probed URL",
+  "activitywiki-webfinger-http-status": "HTTP status",
+  "activitywiki-webfinger-http-status-none": "(no response)",
+  "activitywiki-webfinger-detail": "Detail",
+  "activitywiki-webfinger-setup-hint": "See the \"WebFinger routing\" section of the extension's README to fix this.",
+  "activitywiki-section-followers": "Followers",
+  "activitywiki-follower-count": "$1 {{PLURAL:$1|follower|followers}}",
+  "activitywiki-section-jobqueue": "Job queue",
+  "activitywiki-jobqueue-col-type": "Job type",
+  "activitywiki-jobqueue-col-ready": "Ready",
+  "activitywiki-jobqueue-col-delayed": "Delayed (retry backoff)",
+  "activitywiki-jobqueue-col-pending": "Pending",
+  "activitywiki-section-key": "Signing key",
+  "activitywiki-key-fingerprint-label": "Public key fingerprint (SHA-256)",
+  "activitywiki-key-missing": "No key pair has been generated yet. Run update.php or maintenance/GenerateKeys.php.",
+  "activitywiki-section-recent-activity": "Recent activity",
+  "activitywiki-recent-activity-empty": "No federated activity yet.",
+  "activitywiki-recent-activity-col-type": "Activity",
+  "activitywiki-recent-activity-col-object": "Object",
+  "activitywiki-recent-activity-col-page": "Page",
+  "activitywiki-recent-activity-col-user": "User",
+  "activitywiki-recent-activity-col-time": "Time",
+  "activitywiki-recent-activity-col-delivered": "Delivered",
+  "activitywiki-yes": "Yes",
+  "activitywiki-no": "No"
 }

@@ -1,7 +1,42 @@
 {
   "@metadata": {
-    "authors": ["Luca Mauri"]
+    "authors": [
+      "Luca Mauri"
+    ]
   },
   "activitywiki-desc": "Description of the ActivityWiki extension, shown on Special:Version. Should be a short sentence describing what the extension does.",
-  "activitywiki-default-create-summary": "Fallback content string used in an ActivityPub activity when a page was created with no edit summary. This text is federated publicly to Fediverse followers — keep it neutral and brief. Do not translate markup or wiki syntax."
+  "activitywiki-default-create-summary": "Fallback content string used in an ActivityPub activity when a page was created with no edit summary. This text is federated publicly to Fediverse followers — keep it neutral and brief. Do not translate markup or wiki syntax.",
+  "activitywiki": "{{doc-special|ActivityWiki}} Also used, lowercased, as both the page's title and its entry in Special:SpecialPages, per MediaWiki's default SpecialPage::getDescription() behaviour.",
+  "activitywiki-section-federation": "Section heading on [[Special:ActivityWiki]] for the federation enabled/disabled row.",
+  "activitywiki-federation-enabled": "Shown on [[Special:ActivityWiki]] when $wgActivityWikiEnabled is true.",
+  "activitywiki-federation-disabled": "Shown on [[Special:ActivityWiki]] when $wgActivityWikiEnabled is false. Parameters:\n* $1 - not used; the literal config variable name \"$wgActivityWikiEnabled\" appears in the English source as plain text, not as a message parameter, since it is a technical identifier that should not be translated.",
+  "activitywiki-section-webfinger": "Section heading on [[Special:ActivityWiki]] for the live WebFinger reachability check.",
+  "activitywiki-webfinger-state-ok": "Shown on [[Special:ActivityWiki]] when the live probe of this wiki's own public WebFinger URL succeeded and matched this wiki's expected actor.",
+  "activitywiki-webfinger-state-misconfigured": "Shown on [[Special:ActivityWiki]] when the WebFinger probe got an HTTP response, but it was not a valid WebFinger document for this wiki's actor (wrong rewrite target, or wrong actor returned).",
+  "activitywiki-webfinger-state-unreachable": "Shown on [[Special:ActivityWiki]] when the WebFinger probe could not get any usable HTTP response at all (connection refused, DNS failure, timeout, or a non-2xx/error status).",
+  "activitywiki-webfinger-probed-url": "Table row label on [[Special:ActivityWiki]] for the public WebFinger URL that was probed.",
+  "activitywiki-webfinger-http-status": "Table row label on [[Special:ActivityWiki]] for the HTTP status code returned by the WebFinger probe.",
+  "activitywiki-webfinger-http-status-none": "Shown on [[Special:ActivityWiki]] in place of an HTTP status code when the probe received no response at all (as opposed to receiving an error status such as 404).",
+  "activitywiki-webfinger-detail": "Table row label on [[Special:ActivityWiki]] for the human-readable explanation of the WebFinger check's result.",
+  "activitywiki-webfinger-setup-hint": "Shown on [[Special:ActivityWiki]] only when the WebFinger check did not succeed, pointing the operator at the extension's own README for the manual setup steps. \"README\" and \"WebFinger routing\" refer to literal section/file names in the extension's documentation and should not be translated or need not match translated section headings elsewhere.",
+  "activitywiki-section-followers": "Section heading on [[Special:ActivityWiki]] for the follower count.",
+  "activitywiki-follower-count": "Shown on [[Special:ActivityWiki]] with the number of remote Fediverse actors currently following this wiki. Parameters:\n* $1 - the follower count, a non-negative integer. Supports {{PLURAL:$1|...}}.",
+  "activitywiki-section-jobqueue": "Section heading on [[Special:ActivityWiki]] for the pending-job-queue table.",
+  "activitywiki-jobqueue-col-type": "Column header in the job queue table on [[Special:ActivityWiki]]. The cells beneath it are internal MediaWiki job class names (e.g. \"MediawikiActivityPubDelivery\") and are never translated themselves.",
+  "activitywiki-jobqueue-col-ready": "Column header in the job queue table on [[Special:ActivityWiki]] — jobs in the queue that are ready to run but not yet claimed by a job runner.",
+  "activitywiki-jobqueue-col-delayed": "Column header in the job queue table on [[Special:ActivityWiki]] — jobs scheduled to retry later after a failed delivery attempt.",
+  "activitywiki-jobqueue-col-pending": "Column header in the job queue table on [[Special:ActivityWiki]] — the sum of the \"ready\" and \"delayed\" columns.",
+  "activitywiki-section-key": "Section heading on [[Special:ActivityWiki]] for the signing key fingerprint.",
+  "activitywiki-key-fingerprint-label": "Table row label on [[Special:ActivityWiki]] for the wiki's RSA public key fingerprint.",
+  "activitywiki-key-missing": "Shown on [[Special:ActivityWiki]] in place of the key fingerprint when no RSA key pair has been generated yet. \"update.php\" and \"maintenance/GenerateKeys.php\" are literal command/file names and should not be translated.",
+  "activitywiki-section-recent-activity": "Section heading on [[Special:ActivityWiki]] for the recent federated activity log.",
+  "activitywiki-recent-activity-empty": "Shown on [[Special:ActivityWiki]] in place of the recent-activity table when no activity has ever been federated from this wiki.",
+  "activitywiki-recent-activity-col-type": "Column header in the recent-activity table on [[Special:ActivityWiki]] — the ActivityPub activity type (e.g. \"Create\", \"Update\", \"Delete\"), shown as stored and not translated.",
+  "activitywiki-recent-activity-col-object": "Column header in the recent-activity table on [[Special:ActivityWiki]] — the ActivityPub object type the activity acted on (e.g. \"Article\"), shown as stored and not translated.",
+  "activitywiki-recent-activity-col-page": "Column header in the recent-activity table on [[Special:ActivityWiki]] — the wiki page title the activity was about.",
+  "activitywiki-recent-activity-col-user": "Column header in the recent-activity table on [[Special:ActivityWiki]] — the wiki user whose edit triggered the activity.",
+  "activitywiki-recent-activity-col-time": "Column header in the recent-activity table on [[Special:ActivityWiki]] — when the activity was created, shown in the viewing user's own time zone and date format preference.",
+  "activitywiki-recent-activity-col-delivered": "Column header in the recent-activity table on [[Special:ActivityWiki]] — whether the activity has been delivered to followers' inboxes yet.",
+  "activitywiki-yes": "Generic \"yes\" used in the recent-activity table on [[Special:ActivityWiki]] (the \"Delivered\" column). {{Identical|Yes}}",
+  "activitywiki-no": "Generic \"no\" used in the recent-activity table on [[Special:ActivityWiki]] (the \"Delivered\" column). {{Identical|No}}"
 }

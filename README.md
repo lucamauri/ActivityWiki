@@ -6,7 +6,7 @@ Integrate your MediaWiki instance with the Fediverse via ActivityPub.
 
 ActivityWiki is a MediaWiki extension that enables wiki instances to participate in the Fediverse by implementing the [ActivityPub](https://www.w3.org/TR/activitypub/) W3C protocol. It allows Mastodon users and other Fediverse participants to follow your wiki and receive notifications when pages are created, edited, or deleted — directly in their Fediverse timeline.
 
-> ℹ️ **Current status: v1.1.0 — first fully working release.** Identity (actor + WebFinger), Security (HTTP Signatures, including a documented key rotation path), Publishing (outbound delivery to followers, with a real database-backed outbox), and Receiving (inbox, `Follow`/`Undo` handling, a real database-backed followers collection) are all complete and verified live against real Fediverse traffic (Mastodon). All five ActivityPub-spec-required endpoints — actor, WebFinger, outbox, followers, inbox — are implemented and working end-to-end. See the Roadmap section below for what's deferred as a post-release fast-follow.
+> ℹ️ **Current status: v1.2.0.** Identity (actor + WebFinger), Security (HTTP Signatures, including a documented key rotation path), Publishing (outbound delivery to followers, with a real database-backed outbox), and Receiving (inbox, `Follow`/`Undo` handling, a real database-backed followers collection) are all complete and verified live against real Fediverse traffic (Mastodon). All five ActivityPub-spec-required endpoints — actor, WebFinger, outbox, followers, inbox — are implemented and working end-to-end. An operator status page, `Special:ActivityWiki`, is also available (see [Checking federation status](#checking-federation-status) below). See the Roadmap section below for what's deferred as a post-release fast-follow.
 
 ## Requirements
 
@@ -78,6 +78,14 @@ php maintenance/run.php update.php
 **This step is required.** Without it, the wiki is completely invisible to
 Fediverse search, even though every other endpoint works correctly. See
 [WebFinger routing](#webfinger-routing) below for full instructions.
+
+### 5. (Recommended) Check Special:ActivityWiki
+
+Once steps 1–4 are done, visit `Special:ActivityWiki` on your wiki (logged
+in — see [Checking federation status](#checking-federation-status) below).
+It includes a live check of the WebFinger routing you just set up in step
+4, so it's the fastest way to confirm the whole install actually works
+end-to-end before waiting for a real Fediverse server to tell you either way.
 
 ## Configuration
 
@@ -351,6 +359,37 @@ php maintenance/run.php extensions/ActivityWiki/maintenance/GenerateKeys.php --f
 Restart PHP-FPM after running the script, as a precaution (the script will
 remind you).
 
+## Checking federation status
+
+`Special:ActivityWiki` is a read-only status page (any logged-in account
+can view it — there's nothing sensitive on it) showing, at a glance:
+
+- **Federation** — whether `$wgActivityWikiEnabled` is currently on.
+- **WebFinger discovery** — a *live* check, performed on every page load,
+  of your own public `https://yourdomain.org/.well-known/webfinger` URL.
+  Unlike the other rows, WebFinger depends on the manual setup in
+  [WebFinger routing](#webfinger-routing) above, which is easy to get
+  subtly wrong (and has broken silently in production before — see the
+  Troubleshooting table in that section) — this check exists specifically
+  so a regression there shows up here instead of only when a real
+  Fediverse server fails to find you.
+- **Followers** — current follower count.
+- **Job queue** — pending deliveries and Accept replies, split into
+  "ready" (waiting to run) and "delayed" (backing off after a failed
+  delivery attempt, per `$wgActivityWikiDeliveryRetries`).
+- **Signing key** — the current public key's SHA-256 fingerprint, so you
+  can independently confirm it's the key you expect with:
+  ```bash
+  openssl rsa -pubin -in your_public_key.pem -outform DER | sha256sum
+  ```
+  (reformat the output as colon-separated hex pairs to compare directly).
+- **Recent activity** — the last 20 federated events, with delivery status.
+
+Because the WebFinger check is a live outbound request (5-second timeout),
+expect the page to take slightly longer to load than a typical special
+page — this is normal and is the cost of the check being honest rather
+than cached.
+
 ## Repository Structure
 
 ```
@@ -374,11 +413,16 @@ ActivityWiki/
 │   ├── HttpSigner.php            # Signs outbound HTTP requests
 │   ├── SignatureVerifier.php     # Verifies incoming HTTP Signatures
 │   ├── FollowManager.php         # Follow/Undo business logic for the inbox
+│   ├── WebFingerCheckResult.php  # Value object for the live WebFinger probe's outcome
+│   ├── WebFingerStatusChecker.php # Live WebFinger reachability probe
+│   ├── ActivityWikiStatusReporter.php # Gathers all Special:ActivityWiki data
 │   ├── Api/
 │   │   └── ActivityPubModule.php # Shared actor/URL-building helpers
 │   ├── Jobs/
 │   │   ├── DeliveryJob.php       # Async fan-out delivery to all followers
 │   │   └── AcceptJob.php         # Async single-recipient delivery (Accept replies)
+│   ├── Special/
+│   │   └── SpecialActivityWiki.php # Special:ActivityWiki status page
 │   └── Rest/
 │       ├── ActorHandler.php      # GET  /activitywiki/actor
 │       ├── WebFingerHandler.php  # GET  /activitywiki/webfinger
@@ -386,6 +430,8 @@ ActivityWiki/
 │       ├── FollowersHandler.php  # GET  /activitywiki/followers (real data)
 │       ├── InboxHandler.php      # POST /activitywiki/inbox
 │       └── routes.json           # REST route definitions
+├── resources/
+│   └── ext.activitywiki.special.css # Styling for Special:ActivityWiki
 ├── db/                            # Database schema files
 └── maintenance/
     └── GenerateKeys.php           # Manual key (re)generation — see Key rotation
@@ -422,21 +468,34 @@ ActivityWiki/
 - Real database-backed outbox (`$wgActivityWikiOutboxLimit`)
 - `maintenance/GenerateKeys.php` — manual key generation and `--force`-gated
   rotation (see [Key rotation](#key-rotation))
-- Still planned: `Special:ActivityWiki` status page and MediaWiki log
-  integration (see Post-release fast-follows below)
+- `Special:ActivityWiki` status page — federation status, follower count,
+  job queue depth, recent activity log, key fingerprint, and a live
+  WebFinger reachability check (see [Checking federation
+  status](#checking-federation-status))
+- Still planned: MediaWiki log integration (see Post-release fast-follows
+  below)
 
 ### Post-release fast-follows (not blockers)
 - Actor caching (`activitywiki_actor_cache`)
 - Full outbox pagination (`OrderedCollectionPage` with `first`/`next`/`prev` links) —
   the outbox currently returns the most recent activities up to
   `$wgActivityWikiOutboxLimit`, with an accurate `totalItems`, but no cursor pagination
-- `Special:ActivityWiki` status page and related MediaWiki log integration
+- MediaWiki log integration (`Special:Log` entries for federation events)
 
 ### Post-MVP (deferred, not scoped)
 - Per-user ActivityPub actors (`$wgActivityWikiEnableUserActors`)
 - Extended inbox activity handling (`Like`, `Announce`, reply mentions)
 
 ## Troubleshooting
+
+### Start with Special:ActivityWiki
+
+Before working through the manual `curl` checks below, visit
+`Special:ActivityWiki` on your wiki — it runs the WebFinger check live and
+shows follower count, job queue depth, and key fingerprint in one place.
+The sections below are for digging into a specific symptom further, or for
+checking from the command line (e.g. over SSH, before you've even logged
+into the wiki).
 
 ### Check the actor endpoint is reachable
 

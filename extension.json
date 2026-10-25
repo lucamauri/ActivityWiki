@@ -1,20 +1,23 @@
 {
   "name": "ActivityWiki",
-  "version": "1.1.0",
-  "author": ["Luca Mauri"],
+  "version": "1.2.0",
+  "author": [
+    "Luca Mauri"
+  ],
   "url": "https://github.com/lucamauri/ActivityWiki",
   "descriptionmsg": "activitywiki-desc",
   "license-name": "GPL-2.0-or-later",
   "type": "other",
   "manifest_version": 2,
-
   "requires": {
     "MediaWiki": ">= 1.41.0",
     "platform": {
       "php": ">= 8.0.0"
     }
   },
-  "ServiceWiringFiles": ["src/ServiceWiring.php"],
+  "ServiceWiringFiles": [
+    "src/ServiceWiring.php"
+  ],
   "config": {
     "ActivityWikiEnabled": {
       "value": true,
@@ -65,7 +68,9 @@
       "description": "Federate page protection change events."
     },
     "ActivityWikiPublishNamespaces": {
-      "value": [0],
+      "value": [
+        0
+      ],
       "description": "Array of namespace IDs to federate. Default is main namespace only (0)."
     },
     "ActivityWikiExcerptLength": {
@@ -89,31 +94,32 @@
       "description": "Debug verbosity: 0 = off, 1 = verbose logging to the ActivityWiki log channel."
     }
   },
-
   "MessagesDirs": {
-    "ActivityWiki": ["i18n"]
+    "ActivityWiki": [
+      "i18n"
+    ]
   },
-
   "DatabaseSchemas": {
     "activitywiki_activities": "db/activitywiki_activities.json",
     "activitywiki_followers": "db/activitywiki_followers.sql"
   },
-
   "HookHandlers": {
     "main": {
       "class": "MediaWiki\\Extension\\ActivityWiki\\Hooks",
-      "services": ["MainConfig", "DBLoadBalancerFactory", "JobQueueGroup"]
+      "services": [
+        "MainConfig",
+        "DBLoadBalancerFactory",
+        "JobQueueGroup"
+      ]
     },
     "schema": {
       "class": "MediaWiki\\Extension\\ActivityWiki\\SchemaHooks"
     }
   },
-
   "Hooks": {
     "PageSaveComplete": "main",
     "LoadExtensionSchemaUpdates": "schema"
   },
-
   "JobClasses": {
     "MediawikiActivityPubDelivery": {
       "class": "MediaWiki\\Extension\\ActivityWiki\\Jobs\\DeliveryJob",
@@ -135,9 +141,28 @@
       ]
     }
   },
-
-  "RestModuleFiles": ["src/Rest/routes.json"],
-
+  "RestModuleFiles": [
+    "src/Rest/routes.json"
+  ],
+  "SpecialPages": {
+    "ActivityWiki": {
+      "class": "MediaWiki\\Extension\\ActivityWiki\\Special\\SpecialActivityWiki",
+      "services": [
+        "MainConfig",
+        "DBLoadBalancerFactory",
+        "JobQueueGroup",
+        "ActivityWiki.KeyManager",
+        "ActivityWiki.WebFingerStatusChecker"
+      ]
+    }
+  },
+  "ResourceModules": {
+    "ext.activitywiki.special": {
+      "styles": [
+        "resources/ext.activitywiki.special.css"
+      ]
+    }
+  },
   "AutoloadNamespaces": {
     "MediaWiki\\Extension\\ActivityWiki\\": "src/"
   }

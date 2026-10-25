@@ -25,6 +25,7 @@ use MediaWiki\Extension\ActivityWiki\FollowManager;
 use MediaWiki\Extension\ActivityWiki\HttpSigner;
 use MediaWiki\Extension\ActivityWiki\KeyManager;
 use MediaWiki\Extension\ActivityWiki\SignatureVerifier;
+use MediaWiki\Extension\ActivityWiki\WebFingerStatusChecker;
 use MediaWiki\Extension\ActivityWiki\WikiActorUrls;
 use MediaWiki\MediaWikiServices;
 
@@ -170,6 +171,35 @@ return [
 			$services->getJobQueueGroup(),
 			$services->get( 'ActivityWiki.ActorFetcher' ),
 			$services->get( 'ActivityWiki.WikiActorUrls' )
+		);
+	},
+
+	/**
+	 * ActivityWiki.WebFingerStatusChecker
+	 *
+	 * Performs a live, outbound probe of this wiki's own public
+	 * "/.well-known/webfinger" URL and reports whether Fediverse discovery
+	 * is actually reachable — see WebFingerStatusChecker.php's class
+	 * docblock for the full rationale (Phase 5, Task 5.1 — the
+	 * Special:ActivityWiki status page).
+	 *
+	 * Depends on:
+	 *   - HttpRequestFactory — to perform the outbound probe GET, the same
+	 *     service ActorFetcher already uses for its own outbound fetches.
+	 *   - MainConfig — to read $wgServer when building the public probe
+	 *     URL and the expected "acct:" value.
+	 *   - KeyManager — required only to construct ActivityPubModule
+	 *     internally (see WebFingerStatusChecker's $module property
+	 *     docblock) so it can reuse getActorUsername() rather than
+	 *     duplicating that logic. Not otherwise used by this service.
+	 *
+	 * @return WebFingerStatusChecker
+	 */
+	'ActivityWiki.WebFingerStatusChecker' => static function ( MediaWikiServices $services ): WebFingerStatusChecker {
+		return new WebFingerStatusChecker(
+			$services->getHttpRequestFactory(),
+			$services->getMainConfig(),
+			$services->get( 'ActivityWiki.KeyManager' )
 		);
 	},
 ];

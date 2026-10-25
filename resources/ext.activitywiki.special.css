@@ -1,0 +1,32 @@
+/*
+ * ext.activitywiki.special.css
+ *
+ * Minimal styling for Special:ActivityWiki's status indicators.
+ * Loaded only on that page, via ResourceLoader ("ext.activitywiki.special"
+ * module registered in extension.json, requested from
+ * SpecialActivityWiki::execute() via addModuleStyles()).
+ *
+ * Deliberately tiny — two status colours and one hint style. Does not
+ * attempt to theme the <table class="wikitable"> elements used throughout
+ * the page; those are already styled by the active skin, same as any
+ * other wikitable, so this page looks consistent with the rest of the wiki
+ * rather than introducing its own visual language.
+ */
+
+/* Used for "federation enabled" / "WebFinger reachable" states. */
+.activitywiki-status-ok {
+	color: #006400;
+	font-weight: bold;
+}
+
+/* Used for "federation disabled" / WebFinger MISCONFIGURED or UNREACHABLE states. */
+.activitywiki-status-bad {
+	color: #8b0000;
+	font-weight: bold;
+}
+
+/* The "how to fix this" pointer to README.md, shown only when the
+   WebFinger check is not OK. */
+.activitywiki-hint {
+	font-style: italic;
+}

@@ -1,8 +1,43 @@
 {
   "@metadata": {
-    "authors": ["Luca Mauri"],
+    "authors": [
+      "Luca Mauri"
+    ],
     "license-name": "GPL-2.0-or-later"
   },
-  "activitywiki-desc": "Integra la tua istanza MediaWiki con il Fediverso tramite il protocollo ActivityPub",
-  "activitywiki-default-create-summary": "Nuova pagina creata"
+  "activitywiki-desc": "Integra la tua installazione di MediaWiki con il Fediverso tramite il protocollo ActivityPub",
+  "activitywiki-default-create-summary": "Nuova pagina creata",
+  "activitywiki": "Stato di ActivityWiki",
+  "activitywiki-section-federation": "Federazione",
+  "activitywiki-federation-enabled": "Attiva",
+  "activitywiki-federation-disabled": "Disattivata ($wgActivityWikiEnabled è false)",
+  "activitywiki-section-webfinger": "Rilevamento WebFinger",
+  "activitywiki-webfinger-state-ok": "Raggiungibile e configurato correttamente",
+  "activitywiki-webfinger-state-misconfigured": "Raggiungibile, ma configurato in modo errato",
+  "activitywiki-webfinger-state-unreachable": "Non raggiungibile",
+  "activitywiki-webfinger-probed-url": "URL verificato",
+  "activitywiki-webfinger-http-status": "Stato HTTP",
+  "activitywiki-webfinger-http-status-none": "(nessuna risposta)",
+  "activitywiki-webfinger-detail": "Dettaglio",
+  "activitywiki-webfinger-setup-hint": "Consulta la sezione «WebFinger routing» del README dell'estensione per risolvere il problema.",
+  "activitywiki-section-followers": "Follower",
+  "activitywiki-follower-count": "$1 {{PLURAL:$1|follower}}",
+  "activitywiki-section-jobqueue": "Coda dei job",
+  "activitywiki-jobqueue-col-type": "Tipo di job",
+  "activitywiki-jobqueue-col-ready": "Pronti",
+  "activitywiki-jobqueue-col-delayed": "Ritardati (nuovo tentativo)",
+  "activitywiki-jobqueue-col-pending": "In attesa",
+  "activitywiki-section-key": "Chiave di firma",
+  "activitywiki-key-fingerprint-label": "Impronta della chiave pubblica (SHA-256)",
+  "activitywiki-key-missing": "Non è ancora stata generata alcuna coppia di chiavi. Esegui update.php oppure maintenance/GenerateKeys.php.",
+  "activitywiki-section-recent-activity": "Attività recente",
+  "activitywiki-recent-activity-empty": "Nessuna attività federata finora.",
+  "activitywiki-recent-activity-col-type": "Attività",
+  "activitywiki-recent-activity-col-object": "Oggetto",
+  "activitywiki-recent-activity-col-page": "Pagina",
+  "activitywiki-recent-activity-col-user": "Utente",
+  "activitywiki-recent-activity-col-time": "Data e ora",
+  "activitywiki-recent-activity-col-delivered": "Consegnata",
+  "activitywiki-yes": "Sì",
+  "activitywiki-no": "No"
 }
